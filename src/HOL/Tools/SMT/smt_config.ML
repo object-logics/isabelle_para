@@ -24,10 +24,12 @@ sig
   (*options*)
   val oracle: bool Config.T
   val timeout: real Config.T
+  val reconstruction_step_timeout: real Config.T
   val random_seed: int Config.T
   val read_only_certificates: bool Config.T
   val verbose: bool Config.T
   val trace: bool Config.T
+  val statistics: bool Config.T
   val monomorph_limit: int Config.T
   val monomorph_instances: int Config.T
   val infer_triggers: bool Config.T
@@ -35,11 +37,13 @@ sig
   val sat_solver: string Config.T
 
   (*tools*)
+  val with_time_limit: Proof.context -> real Config.T -> ('a -> 'b) -> 'a -> 'b
   val with_timeout: Proof.context -> ('a -> 'b) -> 'a -> 'b
 
   (*diagnostics*)
   val trace_msg: Proof.context -> ('a -> string) -> 'a -> unit
   val verbose_msg: Proof.context -> ('a -> string) -> 'a -> unit
+  val statistics_msg: Proof.context -> ('a -> string) -> 'a -> unit
 
   (*certificates*)
   val select_certificates: string -> Context.generic -> Context.generic
@@ -60,37 +64,55 @@ type solver_info = {
   avail: unit -> bool,
   options: Proof.context -> string list}
 
-(* FIXME just one data slot (record) per program unit *)
-structure Solvers = Generic_Data
+type data = {
+  solvers: (solver_info * string list) Symtab.table,
+  solver: string option,
+  certs: Cache_IO.cache option}
+
+fun mk_data solvers solver certs: data = {solvers=solvers, solver=solver, certs=certs}
+
+val empty_data = mk_data Symtab.empty NONE NONE
+
+fun solvers_of ({solvers, ...}: data) = solvers
+fun solver_of ({solver, ...}: data) = solver
+fun certs_of ({certs, ...}: data) = certs
+
+fun map_solvers f ({solvers, solver, certs}: data) = mk_data (f solvers) solver certs
+fun map_solver f ({solvers, solver, certs}: data) = mk_data solvers (f solver) certs
+fun put_certs c ({solvers, solver, ...}: data) = mk_data solvers solver c
+
+fun merge_data ({solvers=ss1,solver=s1,certs=c1}: data, {solvers=ss2,solver=s2,certs=c2}: data) =
+  mk_data (Symtab.merge (K true) (ss1, ss2)) (merge_options (s1, s2)) (merge_options (c1, c2))
+
+structure Data = Generic_Data
 (
-  type T = (solver_info * string list) Symtab.table * string option
-  val empty = (Symtab.empty, NONE)
+  type T = data
+  val empty = empty_data
   val extend = I
-  fun merge ((ss1, s1), (ss2, s2)) =
-    (Symtab.merge (K true) (ss1, ss2), merge_options (s1, s2))
+  val merge = merge_data
 )
 
 fun set_solver_options (name, options) =
   let val opts = String.tokens (Symbol.is_ascii_blank o str) options
-  in Solvers.map (apfst (Symtab.map_entry name (apsnd (K opts)))) end
+  in Data.map (map_solvers (Symtab.map_entry name (apsnd (K opts)))) end
 
 fun add_solver (info as {name, ...} : solver_info) context =
-  if Symtab.defined (fst (Solvers.get context)) name then
+  if Symtab.defined (solvers_of (Data.get context)) name then
     error ("Solver already registered: " ^ quote name)
   else
     context
-    |> Solvers.map (apfst (Symtab.update (name, (info, []))))
+    |> Data.map (map_solvers (Symtab.update (name, (info, []))))
     |> Context.map_theory (Attrib.setup (Binding.name (name ^ "_options"))
         (Scan.lift (@{keyword "="} |-- Args.name) >>
           (Thm.declaration_attribute o K o set_solver_options o pair name))
         ("Additional command line options for SMT solver " ^ quote name))
 
-fun all_solvers_of ctxt = Symtab.keys (fst (Solvers.get (Context.Proof ctxt)))
+fun all_solvers_of ctxt = Symtab.keys (solvers_of (Data.get (Context.Proof ctxt)))
 
-fun solver_name_of ctxt = snd (Solvers.get (Context.Proof ctxt))
+fun solver_name_of ctxt = solver_of (Data.get (Context.Proof ctxt))
 
 fun is_available ctxt name =
-  (case Symtab.lookup (fst (Solvers.get (Context.Proof ctxt))) name of
+  (case Symtab.lookup (solvers_of (Data.get (Context.Proof ctxt))) name of
     SOME ({avail, ...}, _) => avail ()
   | NONE => false)
 
@@ -106,7 +128,7 @@ fun warn_solver (Context.Proof ctxt) name =
 fun select_solver name context =
   let
     val ctxt = Context.proof_of context
-    val upd = Solvers.map (apsnd (K (SOME name)))
+    val upd = Data.map (map_solver (K (SOME name)))
   in
     if not (member (op =) (all_solvers_of ctxt) name) then
       error ("Trying to select unknown solver: " ^ quote name)
@@ -123,9 +145,9 @@ fun solver_of ctxt =
   | NONE => no_solver_err ())
 
 fun solver_info_of default select ctxt =
-  (case Solvers.get (Context.Proof ctxt) of
-    (solvers, SOME name) => select (Symtab.lookup solvers name)
-  | (_, NONE) => default ())
+  (case solver_name_of ctxt of
+    NONE => default ()
+  | SOME name => select (Symtab.lookup (solvers_of (Data.get (Context.Proof ctxt))) name))
 
 fun solver_class_of ctxt =
   let fun class_of ({class, ...}: solver_info, _) = class ctxt
@@ -149,10 +171,12 @@ val setup_solver =
 
 val oracle = Attrib.setup_config_bool @{binding smt_oracle} (K true)
 val timeout = Attrib.setup_config_real @{binding smt_timeout} (K 30.0)
+val reconstruction_step_timeout = Attrib.setup_config_real @{binding smt_reconstruction_step_timeout} (K 10.0)
 val random_seed = Attrib.setup_config_int @{binding smt_random_seed} (K 1)
 val read_only_certificates = Attrib.setup_config_bool @{binding smt_read_only_certificates} (K false)
 val verbose = Attrib.setup_config_bool @{binding smt_verbose} (K true)
 val trace = Attrib.setup_config_bool @{binding smt_trace} (K false)
+val statistics = Attrib.setup_config_bool @{binding smt_statistics} (K false)
 val monomorph_limit = Attrib.setup_config_int @{binding smt_monomorph_limit} (K 10)
 val monomorph_instances = Attrib.setup_config_int @{binding smt_monomorph_instances} (K 500)
 val infer_triggers = Attrib.setup_config_bool @{binding smt_infer_triggers} (K false)
@@ -165,39 +189,31 @@ val sat_solver = Attrib.setup_config_string @{binding smt_sat_solver} (K "cdclit
 fun cond_trace flag f x = if flag then tracing ("SMT: " ^ f x) else ()
 
 fun verbose_msg ctxt = cond_trace (Config.get ctxt verbose)
-
 fun trace_msg ctxt = cond_trace (Config.get ctxt trace)
+fun statistics_msg ctxt = cond_trace (Config.get ctxt statistics)
 
 
 (* tools *)
 
-fun with_timeout ctxt f x =
-  TimeLimit.timeLimit (seconds (Config.get ctxt timeout)) f x
+fun with_time_limit ctxt timeout_config f x =
+  TimeLimit.timeLimit (seconds (Config.get ctxt timeout_config)) f x
   handle TimeLimit.TimeOut => raise SMT_Failure.SMT SMT_Failure.Time_Out
+
+fun with_timeout ctxt = with_time_limit ctxt timeout
 
 
 (* certificates *)
 
-(* FIXME just one data slot (record) per program unit *)
-structure Certificates = Generic_Data
-(
-  type T = Cache_IO.cache option
-  val empty = NONE
-  val extend = I
-  fun merge (s, _) = s  (* FIXME merge options!? *)
-)
+val certificates_of = certs_of o Data.get o Context.Proof
 
-val get_certificates_path =
-  Option.map (Cache_IO.cache_path_of) o Certificates.get o Context.Proof
+val get_certificates_path = Option.map (Cache_IO.cache_path_of) o certificates_of
 
-fun select_certificates name context = context |> Certificates.put (
+fun select_certificates name context = context |> Data.map (put_certs (
   if name = "" then NONE
   else
     Path.explode name
     |> Path.append (Resources.master_directory (Context.theory_of context))
-    |> SOME o Cache_IO.unsynchronized_init)
-
-val certificates_of = Certificates.get o Context.Proof
+    |> SOME o Cache_IO.unsynchronized_init))
 
 val setup_certificates =
   Attrib.setup @{binding smt_certificates}
