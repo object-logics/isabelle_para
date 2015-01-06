@@ -110,7 +110,7 @@ describes how to specify codatatypes using the @{command codatatype} command.
 Functions,'' describes how to specify corecursive functions using the
 @{command primcorec} and @{command primcorecursive} commands.
 
-\item Section \ref{sec:introducing-bounded-natural-functors}, ``Introducing
+\item Section \ref{sec:registering-bounded-natural-functors}, ``Registering
 Bounded Natural Functors,'' explains how to use the @{command bnf} command
 to register arbitrary type constructors as BNFs.
 
@@ -325,7 +325,7 @@ type arguments are called \emph{dead}. In @{typ "'a \<Rightarrow> 'b"} and
 Type constructors must be registered as BNFs to have live arguments. This is
 done automatically for datatypes and codatatypes introduced by the
 @{command datatype} and @{command codatatype} commands.
-Section~\ref{sec:introducing-bounded-natural-functors} explains how to
+Section~\ref{sec:registering-bounded-natural-functors} explains how to
 register arbitrary type constructors as BNFs.
 
 Here is another example that fails:
@@ -1137,7 +1137,7 @@ In the other direction, there is currently no way to register old-style
 datatypes as new-style datatypes. If the goal is to define new-style datatypes
 with nested recursion through old-style datatypes, the old-style
 datatypes can be registered as a BNF
-(Section~\ref{sec:introducing-bounded-natural-functors}). If the goal is
+(Section~\ref{sec:registering-bounded-natural-functors}). If the goal is
 to derive discriminators and selectors, this can be achieved using
 @{command free_constructors}
 (Section~\ref{sec:deriving-destructors-and-theorems-for-free-constructors}).
@@ -2627,8 +2627,8 @@ partial_function to the rescue
 *)
 
 
-section {* Introducing Bounded Natural Functors
-  \label{sec:introducing-bounded-natural-functors} *}
+section {* Registering Bounded Natural Functors
+  \label{sec:registering-bounded-natural-functors} *}
 
 text {*
 The (co)datatype package can be set up to allow nested recursion through
@@ -2969,9 +2969,9 @@ Plugins extend the (co)datatype package to interoperate with other Isabelle
 packages and tools, such as the code generator, Transfer, Lifting, and
 Quickcheck. They can be enabled or disabled individually using the
 @{syntax plugins} option to the commands @{command datatype},
-@{command codatatype}, @{command free_constructors}, @{command bnf}, and
-@{command bnf_axiomatization}.
-For example:
+@{command primrec}, @{command codatatype}, @{command primcorec},
+@{command primcorecursive}, @{command bnf}, @{command bnf_axiomatization}, and
+@{command free_constructors}. For example:
 *}
 
     datatype (plugins del: code "quickcheck") color = Red | Black
@@ -2981,13 +2981,13 @@ subsection {* Code Generator
   \label{ssec:code-generator} *}
 
 text {*
-The \hthm{code} plugin registers (co)datatypes and other freely generated types
-for code generation. No distinction is made between datatypes and codatatypes.
-This means that for target languages with a strict evaluation strategy (e.g.,
-Standard ML), programs that attempt to produce infinite codatatype values will
-not terminate.
+The \hthm{code} plugin registers freely generated types, including
+(co)datatypes, and (co)recursive functions for code generation. No distinction
+is made between datatypes and codatatypes. This means that for target languages
+with a strict evaluation strategy (e.g., Standard ML), programs that attempt to
+produce infinite codatatype values will not terminate.
 
-The plugin derives the following properties:
+For types, the plugin derives the following properties:
 
 \begin{indentblock}
 \begin{description}
@@ -3007,9 +3007,10 @@ The plugin derives the following properties:
 \end{indentblock}
 
 In addition, the plugin sets the @{text "[code]"} attribute on a number of
-properties of (co)datatypes and other freely generated types, as documented in
-Sections \ref{ssec:datatype-generated-theorems} and
-\ref{ssec:codatatype-generated-theorems}.
+properties of freely generated types and of (co)recursive functions, as
+documented in Sections \ref{ssec:datatype-generated-theorems},
+\ref{ssec:primrec-generated-theorems}, \ref{ssec:codatatype-generated-theorems},
+and~\ref{ssec:primcorec-generated-theorems}.
 *}
 
 
