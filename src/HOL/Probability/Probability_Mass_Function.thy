@@ -502,6 +502,12 @@ lemma integral_bernoulli_pmf[simp]:
   shows "(\<integral>x. f x \<partial>bernoulli_pmf p) = f True * p + f False * (1 - p)"
   by (subst integral_measure_pmf[of UNIV]) (auto simp: UNIV_bool)
 
+lemma pmf_bernoulli_half [simp]: "pmf (bernoulli_pmf (1 / 2)) x = 1 / 2"
+by(cases x) simp_all
+
+lemma measure_pmf_bernoulli_half: "measure_pmf (bernoulli_pmf (1 / 2)) = uniform_count_measure UNIV"
+by(rule measure_eqI)(simp_all add: nn_integral_pmf[symmetric] emeasure_uniform_count_measure nn_integral_count_space_finite sets_uniform_count_measure)
+
 subsubsection \<open> Geometric Distribution \<close>
 
 lift_definition geometric_pmf :: "nat pmf" is "\<lambda>n. 1 / 2^Suc n"
@@ -639,7 +645,7 @@ lemma measurable_measure_pmf[measurable]:
   "(\<lambda>x. measure_pmf (M x)) \<in> measurable (count_space UNIV) (subprob_algebra (count_space UNIV))"
   by (auto simp: space_subprob_algebra intro!: prob_space_imp_subprob_space) unfold_locales
 
-lemma bind_pmf_cong:
+lemma bind_measure_pmf_cong:
   assumes "\<And>x. A x \<in> space (subprob_algebra N)" "\<And>x. B x \<in> space (subprob_algebra N)"
   assumes "\<And>i. i \<in> set_pmf x \<Longrightarrow> A i = B i"
   shows "bind (measure_pmf x) A = bind (measure_pmf x) B"
@@ -879,6 +885,16 @@ lemma map_join_pmf: "map_pmf f (join_pmf AA) = join_pmf (map_pmf (map_pmf f) AA)
   unfolding bind_return_pmf''[symmetric] join_eq_bind_pmf bind_assoc_pmf
   by (simp add: bind_return_pmf'')
 
+lemma bind_pmf_cong:
+  "\<lbrakk> p = q; \<And>x. x \<in> set_pmf q \<Longrightarrow> f x = g x \<rbrakk>
+  \<Longrightarrow> bind_pmf p f = bind_pmf q g"
+by(simp add: bind_pmf_def cong: map_pmf_cong)
+
+lemma bind_pmf_cong_simp:
+  "\<lbrakk> p = q; \<And>x. x \<in> set_pmf q =simp=> f x = g x \<rbrakk>
+  \<Longrightarrow> bind_pmf p f = bind_pmf q g"
+by(simp add: simp_implies_def cong: bind_pmf_cong)
+
 definition "pair_pmf A B = bind_pmf A (\<lambda>x. bind_pmf B (\<lambda>y. return_pmf (x, y)))"
 
 lemma pmf_pair: "pmf (pair_pmf M N) (a, b) = pmf M a * pmf N b"
@@ -1062,29 +1078,32 @@ proof -
 qed
 
 lemma bind_cond_pmf_cancel:
-  assumes in_S: "\<And>x. x \<in> set_pmf p \<Longrightarrow> x \<in> S x"
+  assumes in_S: "\<And>x. x \<in> set_pmf p \<Longrightarrow> x \<in> S x" "\<And>x. x \<in> set_pmf q \<Longrightarrow> x \<in> S x"
   assumes S_eq: "\<And>x y. x \<in> S y \<Longrightarrow> S x = S y"
-  shows "bind_pmf p (\<lambda>x. cond_pmf p (S x)) = p"
+  and same: "\<And>x. measure (measure_pmf p) (S x) = measure (measure_pmf q) (S x)"
+  shows "bind_pmf p (\<lambda>x. cond_pmf q (S x)) = q" (is "?lhs = _")
 proof (rule pmf_eqI)
-  have [simp]: "\<And>x. x \<in> p \<Longrightarrow> p \<inter> (S x) \<noteq> {}"
-    using in_S by auto
-  fix z
-  have pmf_le: "pmf p z \<le> measure p (S z)"
-  proof cases
-    assume "z \<in> p" from in_S[OF this] show ?thesis
-      by (auto intro!: measure_pmf.finite_measure_mono simp: pmf.rep_eq)
-  qed (simp add: set_pmf_iff measure_nonneg)
+  { fix x
+    assume "x \<in> set_pmf p"
+    hence "set_pmf p \<inter> (S x) \<noteq> {}" using in_S by auto
+    hence "measure (measure_pmf p) (S x) \<noteq> 0"
+      by(auto simp add: measure_pmf.prob_eq_0 AE_measure_pmf_iff)
+    with same have "measure (measure_pmf q) (S x) \<noteq> 0" by simp
+    hence "set_pmf q \<inter> S x \<noteq> {}"
+      by(auto simp add: measure_pmf.prob_eq_0 AE_measure_pmf_iff) }
+  note [simp] = this
 
-  have "ereal (pmf (bind_pmf p (\<lambda>x. cond_pmf p (S x))) z) =
-    (\<integral>\<^sup>+ x. ereal (pmf p z / measure p (S z)) * indicator (S z) x \<partial>p)"
-    by (subst ereal_pmf_bind)
-       (auto intro!: nn_integral_cong_AE dest!: S_eq split: split_indicator
-             simp: AE_measure_pmf_iff pmf_cond pmf_eq_0_set_pmf in_S)
-  also have "\<dots> = pmf p z"
-    using pmf_le pmf_nonneg[of p z]
-    by (subst nn_integral_cmult) (simp_all add: measure_nonneg measure_pmf.emeasure_eq_measure)
-  finally show "pmf (bind_pmf p (\<lambda>x. cond_pmf p (S x))) z = pmf p z"
-    by simp
+  fix z
+  have pmf_q_z: "z \<notin> S z \<Longrightarrow> pmf q z = 0"
+    by(erule contrapos_np)(simp add: pmf_eq_0_set_pmf in_S)
+
+  have "ereal (pmf ?lhs z) = \<integral>\<^sup>+ x. ereal (pmf (cond_pmf q (S x)) z) \<partial>measure_pmf p"
+    by(simp add: ereal_pmf_bind)
+  also have "\<dots> = \<integral>\<^sup>+ x. ereal (pmf q z / measure p (S z)) * indicator (S z) x \<partial>measure_pmf p"
+    by(rule nn_integral_cong_AE)(auto simp add: AE_measure_pmf_iff pmf_cond same pmf_q_z in_S dest!: S_eq split: split_indicator)
+  also have "\<dots> = pmf q z" using pmf_nonneg[of q z]
+    by (subst nn_integral_cmult)(auto simp add: measure_nonneg measure_pmf.emeasure_eq_measure same measure_pmf.prob_eq_0 AE_measure_pmf_iff pmf_eq_0_set_pmf in_S)
+  finally show "pmf ?lhs z = pmf q z" by simp
 qed
 
 inductive rel_pmf :: "('a \<Rightarrow> 'b \<Rightarrow> bool) \<Rightarrow> 'a pmf \<Rightarrow> 'b pmf \<Rightarrow> bool"
@@ -1233,6 +1252,141 @@ next
     by (rule rel_pmf.intros[where pq="?pq"])
        (auto simp: map_snd_pair_pmf map_fst_pair_pmf set_pair_pmf set_map_pmf map_pmf_comp Rpq Spq
                    map_pair)
+qed
+
+lemma rel_pmf_reflI: 
+  assumes "\<And>x. x \<in> set_pmf p \<Longrightarrow> P x x"
+  shows "rel_pmf P p p"
+by(rule rel_pmf.intros[where pq="map_pmf (\<lambda>x. (x, x)) p"])(auto simp add: pmf.map_comp o_def set_map_pmf assms)
+
+lemma rel_pmf_joinI:
+  assumes "rel_pmf (rel_pmf P) p q"
+  shows "rel_pmf P (join_pmf p) (join_pmf q)"
+proof -
+  from assms obtain pq where p: "p = map_pmf fst pq"
+    and q: "q = map_pmf snd pq"
+    and P: "\<And>x y. (x, y) \<in> set_pmf pq \<Longrightarrow> rel_pmf P x y"
+    by cases auto
+  from P obtain PQ 
+    where PQ: "\<And>x y a b. \<lbrakk> (x, y) \<in> set_pmf pq; (a, b) \<in> set_pmf (PQ x y) \<rbrakk> \<Longrightarrow> P a b"
+    and x: "\<And>x y. (x, y) \<in> set_pmf pq \<Longrightarrow> map_pmf fst (PQ x y) = x"
+    and y: "\<And>x y. (x, y) \<in> set_pmf pq \<Longrightarrow> map_pmf snd (PQ x y) = y"
+    by(metis rel_pmf.simps)
+
+  let ?r = "bind_pmf pq (\<lambda>(x, y). PQ x y)"
+  have "\<And>a b. (a, b) \<in> set_pmf ?r \<Longrightarrow> P a b" by(auto simp add: set_bind_pmf intro: PQ)
+  moreover have "map_pmf fst ?r = join_pmf p" "map_pmf snd ?r = join_pmf q"
+    by(simp_all add: bind_pmf_def map_join_pmf pmf.map_comp o_def split_def p q x y cong: pmf.map_cong)
+  ultimately show ?thesis ..
+qed
+
+lemma rel_pmf_bindI:
+  assumes pq: "rel_pmf R p q"
+  and fg: "\<And>x y. R x y \<Longrightarrow> rel_pmf P (f x) (g y)"
+  shows "rel_pmf P (bind_pmf p f) (bind_pmf q g)"
+unfolding bind_pmf_def
+by(rule rel_pmf_joinI)(auto simp add: pmf.rel_map intro: pmf.rel_mono[THEN le_funD, THEN le_funD, THEN le_boolD, THEN mp, OF _ pq] fg)
+
+text {*
+  Proof that @{const rel_pmf} preserves orders.
+  Antisymmetry proof follows Thm. 1 in N. Saheb-Djahromi, Cpo's of measures for nondeterminism, 
+  Theoretical Computer Science 12(1):19--37, 1980, 
+  @{url "http://dx.doi.org/10.1016/0304-3975(80)90003-1"}
+*}
+
+lemma 
+  assumes *: "rel_pmf R p q"
+  and refl: "reflp R" and trans: "transp R"
+  shows measure_Ici: "measure p {y. R x y} \<le> measure q {y. R x y}" (is ?thesis1)
+  and measure_Ioi: "measure p {y. R x y \<and> \<not> R y x} \<le> measure q {y. R x y \<and> \<not> R y x}" (is ?thesis2)
+proof -
+  from * obtain pq
+    where pq: "\<And>x y. (x, y) \<in> set_pmf pq \<Longrightarrow> R x y"
+    and p: "p = map_pmf fst pq"
+    and q: "q = map_pmf snd pq"
+    by cases auto
+  show ?thesis1 ?thesis2 unfolding p q map_pmf.rep_eq using refl trans
+    by(auto 4 3 simp add: measure_distr reflpD AE_measure_pmf_iff intro!: measure_pmf.finite_measure_mono_AE dest!: pq elim: transpE)
+qed
+
+lemma rel_pmf_inf:
+  fixes p q :: "'a pmf"
+  assumes 1: "rel_pmf R p q"
+  assumes 2: "rel_pmf R q p"
+  and refl: "reflp R" and trans: "transp R"
+  shows "rel_pmf (inf R R\<inverse>\<inverse>) p q"
+proof
+  let ?E = "\<lambda>x. {y. R x y \<and> R y x}"
+  let ?\<mu>E = "\<lambda>x. measure q (?E x)"
+  { fix x
+    have "measure p (?E x) = measure p ({y. R x y} - {y. R x y \<and> \<not> R y x})"
+      by(auto intro!: arg_cong[where f="measure p"])
+    also have "\<dots> = measure p {y. R x y} - measure p {y. R x y \<and> \<not> R y x}"
+      by (rule measure_pmf.finite_measure_Diff) auto
+    also have "measure p {y. R x y \<and> \<not> R y x} = measure q {y. R x y \<and> \<not> R y x}"
+      using 1 2 refl trans by(auto intro!: Orderings.antisym measure_Ioi)
+    also have "measure p {y. R x y} = measure q {y. R x y}"
+      using 1 2 refl trans by(auto intro!: Orderings.antisym measure_Ici)
+    also have "measure q {y. R x y} - measure q {y. R x y \<and> ~ R y x} =
+      measure q ({y. R x y} - {y. R x y \<and> \<not> R y x})"
+      by(rule measure_pmf.finite_measure_Diff[symmetric]) auto
+    also have "\<dots> = ?\<mu>E x"
+      by(auto intro!: arg_cong[where f="measure q"])
+    also note calculation }
+  note eq = this
+
+  def pq \<equiv> "bind_pmf p (\<lambda>x. bind_pmf (cond_pmf q (?E x)) (\<lambda>y. return_pmf (x, y)))"
+
+  show "map_pmf fst pq = p"
+    by(simp add: pq_def map_bind_pmf map_return_pmf bind_return_pmf')
+
+  show "map_pmf snd pq = q"
+    unfolding pq_def map_bind_pmf map_return_pmf bind_return_pmf' snd_conv
+    by(subst bind_cond_pmf_cancel)(auto simp add: reflpD[OF \<open>reflp R\<close>] eq  intro: transpD[OF \<open>transp R\<close>])
+
+  fix x y
+  assume "(x, y) \<in> set_pmf pq"
+  moreover
+  { assume "x \<in> set_pmf p"
+    hence "measure (measure_pmf p) (?E x) \<noteq> 0"
+      by(auto simp add: measure_pmf.prob_eq_0 AE_measure_pmf_iff intro: reflpD[OF \<open>reflp R\<close>])
+    hence "measure (measure_pmf q) (?E x) \<noteq> 0" using eq by simp
+    hence "set_pmf q \<inter> {y. R x y \<and> R y x} \<noteq> {}" 
+      by(auto simp add: measure_pmf.prob_eq_0 AE_measure_pmf_iff) }
+  ultimately show "inf R R\<inverse>\<inverse> x y"
+    by(auto simp add: pq_def set_bind_pmf set_return_pmf set_cond_pmf)
+qed
+
+lemma rel_pmf_antisym:
+  fixes p q :: "'a pmf"
+  assumes 1: "rel_pmf R p q"
+  assumes 2: "rel_pmf R q p"
+  and refl: "reflp R" and trans: "transp R" and antisym: "antisymP R"
+  shows "p = q"
+proof -
+  from 1 2 refl trans have "rel_pmf (inf R R\<inverse>\<inverse>) p q" by(rule rel_pmf_inf)
+  also have "inf R R\<inverse>\<inverse> = op ="
+    using refl antisym by(auto intro!: ext simp add: reflpD dest: antisymD)
+  finally show ?thesis unfolding pmf.rel_eq .
+qed
+
+lemma reflp_rel_pmf: "reflp R \<Longrightarrow> reflp (rel_pmf R)"
+by(blast intro: reflpI rel_pmf_reflI reflpD)
+
+lemma antisymP_rel_pmf:
+  "\<lbrakk> reflp R; transp R; antisymP R \<rbrakk>
+  \<Longrightarrow> antisymP (rel_pmf R)"
+by(rule antisymI)(blast intro: rel_pmf_antisym)
+
+lemma transp_rel_pmf:
+  assumes "transp R"
+  shows "transp (rel_pmf R)"
+proof (rule transpI)
+  fix x y z
+  assume "rel_pmf R x y" and "rel_pmf R y z"
+  hence "rel_pmf (R OO R) x z" by (simp add: pmf.rel_compp relcompp.relcompI)
+  thus "rel_pmf R x z"
+    using assms by (metis (no_types) pmf.rel_mono rev_predicate2D transp_relcompp_less_eq)
 qed
 
 end

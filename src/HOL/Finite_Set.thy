@@ -262,6 +262,10 @@ lemma finite_image_set [simp]:
   "finite {x. P x} \<Longrightarrow> finite { f x | x. P x }"
   by (simp add: image_Collect [symmetric])
 
+lemma finite_image_set2:
+  "finite {x. P x} \<Longrightarrow> finite {y. Q y} \<Longrightarrow> finite {f x y | x y. P x \<and> Q y}"
+  by (rule finite_subset [where B = "\<Union>x \<in> {x. P x}. \<Union>y \<in> {y. Q y}. {f x y}"]) auto
+
 lemma finite_imageD:
   assumes "finite (f ` A)" and "inj_on f A"
   shows "finite A"
@@ -311,14 +315,11 @@ lemma finite_vimageI:
   "finite F \<Longrightarrow> inj h \<Longrightarrow> finite (h -` F)"
   using finite_vimage_IntI[of F h UNIV] by auto
 
-lemma finite_vimageD:
-  assumes fin: "finite (h -` F)" and surj: "surj h"
-  shows "finite F"
-proof -
-  have "finite (h ` (h -` F))" using fin by (rule finite_imageI)
-  also have "h ` (h -` F) = F" using surj by (rule surj_image_vimage_eq)
-  finally show "finite F" .
-qed
+lemma finite_vimageD': "\<lbrakk> finite (f -` A); A \<subseteq> range f \<rbrakk> \<Longrightarrow> finite A"
+by(auto simp add: subset_image_iff intro: finite_subset[rotated])
+
+lemma finite_vimageD: "\<lbrakk> finite (h -` F); surj h \<rbrakk> \<Longrightarrow> finite F"
+by(auto dest: finite_vimageD')
 
 lemma finite_vimage_iff: "bij h \<Longrightarrow> finite (h -` F) \<longleftrightarrow> finite F"
   unfolding bij_def by (auto elim: finite_vimageD finite_vimageI)
@@ -1618,6 +1619,9 @@ proof -
    by (force intro: card_mono simp: card_image [symmetric])
 qed
 
+lemma surj_card_le: "finite A \<Longrightarrow> B \<subseteq> f ` A \<Longrightarrow> card B \<le> card A"
+  by (blast intro: card_image_le card_mono le_trans)
+
 lemma card_bij_eq:
   "[|inj_on f A; f ` A \<subseteq> B; inj_on g B; g ` B \<subseteq> A;
      finite A; finite B |] ==> card A = card B"
@@ -1634,6 +1638,8 @@ assumes "inj_on f A" "f ` A \<le> B" "finite B"
 shows "finite A"
 using assms finite_imageD finite_subset by blast
 
+lemma card_vimage_inj: "\<lbrakk> inj f; A \<subseteq> range f \<rbrakk> \<Longrightarrow> card (f -` A) = card A"
+by(auto 4 3 simp add: subset_image_iff inj_vimage_image_eq intro: card_image[symmetric, OF subset_inj_on])
 
 subsubsection {* Pigeonhole Principles *}
 
