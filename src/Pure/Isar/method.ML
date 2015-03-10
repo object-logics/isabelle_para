@@ -41,7 +41,7 @@ sig
   val set_tactic: (morphism -> thm list -> tactic) -> Context.generic -> Context.generic
   type combinator_info
   val no_combinator_info: combinator_info
-  datatype combinator = Then | Orelse | Try | Repeat1 | Select_Goals of int
+  datatype combinator = Then | Then_All_New | Orelse | Try | Repeat1 | Select_Goals of int
   datatype text =
     Source of Token.src |
     Basic of Proof.context -> method |
@@ -76,6 +76,7 @@ sig
   val reports_of: text_range -> Position.report list
   val report: text_range -> unit
   val parse: text_range parser
+  val parse_internal: Proof.context -> text_range parser
 end;
 
 structure Method: METHOD =
@@ -299,7 +300,7 @@ datatype combinator_info = Combinator_Info of {keywords: Position.T list};
 fun combinator_info keywords = Combinator_Info {keywords = keywords};
 val no_combinator_info = combinator_info [];
 
-datatype combinator = Then | Orelse | Try | Repeat1 | Select_Goals of int;
+datatype combinator = Then | Then_All_New | Orelse | Try | Repeat1 | Select_Goals of int;
 
 datatype text =
   Source of Token.src |
@@ -408,28 +409,40 @@ fun method_cmd ctxt = method ctxt o method_closure ctxt;
 
 local
 
-fun APPEND_CASES (meth: cases_tactic) (cases, st) =
-  meth st |> Seq.map (fn (cases', st') => (cases @ cases', st'));
+fun APPEND_CASES (tac: cases_tactic) ((cases, st): cases_state) =
+  tac st |> Seq.map (fn (cases', st') => (cases @ cases', st'));
 
-fun BYPASS_CASES (tac: tactic) (cases, st) =
+fun BYPASS_CASES (tac: tactic) ((cases, st): cases_state) =
   tac st |> Seq.map (pair cases);
 
 val op THEN = Seq.THEN;
 
-fun SELECT_GOALS n method =
-  BYPASS_CASES
-    (ALLGOALS Goal.conjunction_tac THEN PRIMITIVE (Goal.restrict 1 n) THEN Goal.conjunction_tac 1)
-  THEN method
-  THEN BYPASS_CASES (PRIMITIVE (Goal.unrestrict 1));
+val preparation = BYPASS_CASES (ALLGOALS Goal.conjunction_tac);
+
+fun RESTRICT_GOAL i n method =
+  BYPASS_CASES (PRIMITIVE (Goal.restrict i n)) THEN
+  method THEN
+  BYPASS_CASES (PRIMITIVE (Goal.unrestrict i));
+
+fun SELECT_GOAL method i = RESTRICT_GOAL i 1 method;
+
+fun (method1 THEN_ALL_NEW method2) i (st: cases_state) =
+  st |> (method1 i THEN (fn st' =>
+    Seq.INTERVAL method2 i (i + Thm.nprems_of (snd st') - Thm.nprems_of (snd st)) st'));
 
 fun COMBINATOR1 comb [meth] = comb meth
   | COMBINATOR1 _ _ = raise Fail "Method combinator requires exactly one argument";
 
 fun combinator Then = Seq.EVERY
+  | combinator Then_All_New =
+      (fn [] => Seq.single
+        | methods =>
+            preparation THEN foldl1 (op THEN_ALL_NEW) (map SELECT_GOAL methods) 1)
   | combinator Orelse = Seq.FIRST
   | combinator Try = COMBINATOR1 Seq.TRY
   | combinator Repeat1 = COMBINATOR1 Seq.REPEAT1
-  | combinator (Select_Goals n) = COMBINATOR1 (SELECT_GOALS n);
+  | combinator (Select_Goals n) =
+      COMBINATOR1 (fn method => preparation THEN RESTRICT_GOAL 1 n method);
 
 in
 
@@ -541,42 +554,58 @@ val report = Position.reports o reports_of;
 end;
 
 
-(* outer parser *)
+(* parser *)
+
+local
 
 fun is_symid_meth s =
   s <> "|" andalso s <> "?" andalso s <> "+" andalso Token.ident_or_symbolic s;
 
-local
+fun parser check_ctxt low_pri =
+  let
+    val (meth_name, mk_src) =
+      (case check_ctxt of
+        NONE => (Parse.xname, Token.src)
+      | SOME ctxt =>
+         (Args.checked_name (fn (xname, _) => check_name ctxt (xname, Position.none)),
+          fn name => fn args => #1 (check_src ctxt (Token.src name args))));
 
-fun meth4 x =
- (Parse.position Parse.xname >> (fn name => Source (Token.src name [])) ||
-  Scan.ahead Parse.cartouche |-- Parse.not_eof >> (fn tok =>
-    Source (Token.src ("cartouche", Token.pos_of tok) [tok])) ||
-  Parse.$$$ "(" |-- Parse.!!! (meth0 --| Parse.$$$ ")")) x
-and meth3 x =
- (meth4 -- Parse.position (Parse.$$$ "?")
-    >> (fn (m, (_, pos)) => Combinator (combinator_info [pos], Try, [m])) ||
-  meth4 -- Parse.position (Parse.$$$ "+")
-    >> (fn (m, (_, pos)) => Combinator (combinator_info [pos], Repeat1, [m])) ||
-  meth4 --
-    (Parse.position (Parse.$$$ "[") -- Scan.optional Parse.nat 1 -- Parse.position (Parse.$$$ "]"))
-    >> (fn (m, (((_, pos1), n), (_, pos2))) =>
-        Combinator (combinator_info [pos1, pos2], Select_Goals n, [m])) ||
-  meth4) x
-and meth2 x =
- (Parse.position Parse.xname -- Parse.args1 is_symid_meth >> (Source o uncurry Token.src) ||
-  meth3) x
-and meth1 x =
-  (Parse.enum1_positions "," meth2
-    >> (fn ([m], _) => m | (ms, ps) => Combinator (combinator_info ps, Then, ms))) x
-and meth0 x =
-  (Parse.enum1_positions "|" meth1
-    >> (fn ([m], _) => m | (ms, ps) => Combinator (combinator_info ps, Orelse, ms))) x;
+    fun meth5 x =
+     (Parse.position meth_name >> (fn name => Source (mk_src name [])) ||
+      Scan.ahead Parse.cartouche |-- Parse.not_eof >> (fn tok =>
+        Source (mk_src ("cartouche", Token.pos_of tok) [tok])) ||
+      Parse.$$$ "(" |-- Parse.!!! (meth0 --| Parse.$$$ ")")) x
+    and meth4 x =
+     (meth5 -- Parse.position (Parse.$$$ "?")
+        >> (fn (m, (_, pos)) => Combinator (combinator_info [pos], Try, [m])) ||
+      meth5 -- Parse.position (Parse.$$$ "+")
+        >> (fn (m, (_, pos)) => Combinator (combinator_info [pos], Repeat1, [m])) ||
+      meth5 --
+        (Parse.position (Parse.$$$ "[") -- Scan.optional Parse.nat 1 -- Parse.position (Parse.$$$ "]"))
+        >> (fn (m, (((_, pos1), n), (_, pos2))) =>
+            Combinator (combinator_info [pos1, pos2], Select_Goals n, [m])) ||
+      meth5) x
+    and meth3 x =
+     (Parse.position meth_name -- Parse.args1 is_symid_meth >> (Source o uncurry mk_src) ||
+      meth4) x
+    and meth2 x =
+      (Parse.enum1_positions "," meth3
+        >> (fn ([m], _) => m | (ms, ps) => Combinator (combinator_info ps, Then, ms))) x
+    and meth1 x =
+      (Parse.enum1_positions ";" meth2
+        >> (fn ([m], _) => m | (ms, ps) => Combinator (combinator_info ps, Then_All_New, ms))) x
+    and meth0 x =
+      (Parse.enum1_positions "|" meth1
+        >> (fn ([m], _) => m | (ms, ps) => Combinator (combinator_info ps, Orelse, ms))) x;
+  in
+    Scan.trace (if low_pri then meth0 else meth4)
+      >> (fn (m, toks) => (m, Token.range_of toks))
+  end;
 
 in
 
-val parse =
-  Scan.trace meth3 >> (fn (m, toks) => (m, Token.range_of toks));
+val parse = parser NONE false;
+fun parse_internal ctxt = parser (SOME ctxt) true;
 
 end;
 
