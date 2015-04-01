@@ -514,8 +514,7 @@ lemma pochhammer_neq_0_mono:
   unfolding pochhammer_eq_0_iff by auto
 
 lemma pochhammer_minus:
-  assumes kn: "k \<le> n"
-  shows "pochhammer (- b) k = ((- 1) ^ k :: 'a::comm_ring_1) * pochhammer (b - of_nat k + 1) k"
+    "pochhammer (- b) k = ((- 1) ^ k :: 'a::comm_ring_1) * pochhammer (b - of_nat k + 1) k"
 proof (cases k)
   case 0
   then show ?thesis by simp
@@ -531,16 +530,15 @@ next
 qed
 
 lemma pochhammer_minus':
-  assumes kn: "k \<le> n"
-  shows "pochhammer (b - of_nat k + 1) k = ((- 1) ^ k :: 'a::comm_ring_1) * pochhammer (- b) k"
-  unfolding pochhammer_minus[OF kn, where b=b]
+    "pochhammer (b - of_nat k + 1) k = ((- 1) ^ k :: 'a::comm_ring_1) * pochhammer (- b) k"
+  unfolding pochhammer_minus[where b=b]
   unfolding mult.assoc[symmetric]
   unfolding power_add[symmetric]
   by simp
 
 lemma pochhammer_same: "pochhammer (- of_nat n) n =
     ((- 1) ^ n :: 'a::{semiring_char_0,comm_ring_1,semiring_no_zero_divisors}) * (fact n)"
-  unfolding pochhammer_minus[OF le_refl[of n]]
+  unfolding pochhammer_minus
   by (simp add: of_nat_diff pochhammer_fact)
 
 
@@ -551,11 +549,7 @@ definition gbinomial :: "'a::field_char_0 \<Rightarrow> nat \<Rightarrow> 'a" (i
     (if n = 0 then 1 else (setprod (\<lambda>i. a - of_nat i) {0 .. n - 1}) / (fact n))"
 
 lemma gbinomial_0 [simp]: "a gchoose 0 = 1" "0 gchoose (Suc n) = 0"
-  apply (simp_all add: gbinomial_def)
-  apply (subgoal_tac "(\<Prod>i\<Colon>nat\<in>{0\<Colon>nat..n}. - of_nat i) = (0::'b)")
-   apply (simp del:setprod_zero_iff)
-  apply simp
-  done
+  by (simp_all add: gbinomial_def)
 
 lemma gbinomial_pochhammer: "a gchoose n = (- 1) ^ n * pochhammer (- a) n / (fact n)"
 proof (cases "n = 0")
@@ -723,7 +717,7 @@ text{*Contributed by Manuel Eberl, generalised by LCP.
   Alternative definition of the binomial coefficient as @{term "\<Prod>i<k. (n - i) / (k - i)"} *}
 lemma gbinomial_altdef_of_nat:
   fixes k :: nat
-    and x :: "'a :: {field_char_0,field_inverse_zero}"
+    and x :: "'a :: {field_char_0,field}"
   shows "x gchoose k = (\<Prod>i<k. (x - of_nat i) / of_nat (k - i) :: 'a)"
 proof -
   have "(x gchoose k) = (\<Prod>i<k. x - of_nat i) / of_nat (fact k)"
@@ -737,7 +731,7 @@ qed
 
 lemma gbinomial_ge_n_over_k_pow_k:
   fixes k :: nat
-    and x :: "'a :: linordered_field_inverse_zero"
+    and x :: "'a :: linordered_field"
   assumes "of_nat k \<le> x"
   shows "(x / of_nat k :: 'a) ^ k \<le> x gchoose k"
 proof -
@@ -767,7 +761,7 @@ qed
 text{*Versions of the theorems above for the natural-number version of "choose"*}
 lemma binomial_altdef_of_nat:
   fixes n k :: nat
-    and x :: "'a :: {field_char_0,field_inverse_zero}"  --{*the point is to constrain @{typ 'a}*}
+    and x :: "'a :: {field_char_0,field}"  --{*the point is to constrain @{typ 'a}*}
   assumes "k \<le> n"
   shows "of_nat (n choose k) = (\<Prod>i<k. of_nat (n - i) / of_nat (k - i) :: 'a)"
 using assms
@@ -775,7 +769,7 @@ by (simp add: gbinomial_altdef_of_nat binomial_gbinomial of_nat_diff)
 
 lemma binomial_ge_n_over_k_pow_k:
   fixes k n :: nat
-    and x :: "'a :: linordered_field_inverse_zero"
+    and x :: "'a :: linordered_field"
   assumes "k \<le> n"
   shows "(of_nat n / of_nat k :: 'a) ^ k \<le> of_nat (n choose k)"
 by (simp add: assms gbinomial_ge_n_over_k_pow_k binomial_gbinomial of_nat_diff)

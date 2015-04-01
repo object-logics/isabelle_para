@@ -2555,9 +2555,7 @@ proof -
   let ?KM = "{(k,m). k + m \<le> n}"
   let ?f = "\<lambda>s. UNION {(0::nat)..s} (\<lambda>i. {(i,s - i)})"
   have th0: "?KM = UNION {0..n} ?f"
-    apply (simp add: set_eq_iff)
-    apply presburger (* FIXME: slow! *)
-    done
+    by (auto simp add: set_eq_iff Bex_def)
   show "?l = ?r "
     unfolding th0
     apply (subst setsum.UNION_disjoint)
@@ -3230,11 +3228,11 @@ proof -
       then obtain m where m: "n = Suc m" by (cases n) auto
       from k0 obtain h where h: "k = Suc h" by (cases k) auto
       {
-        assume kn: "k = n"
+        assume "k = n"
         then have "b gchoose (n - k) =
           (?m1 n * ?p b n * ?m1 k * ?p (of_nat n) k) / (?f n * pochhammer (b - of_nat n + 1) k)"
-          using kn pochhammer_minus'[where k=k and n=n and b=b]
-          apply (simp add:  pochhammer_same)
+          using pochhammer_minus'[where k=k and b=b]
+          apply (simp add: pochhammer_same)
           using bn0
           apply (simp add: field_simps power_add[symmetric])
           done
@@ -3357,10 +3355,10 @@ proof -
     apply (auto simp add: of_nat_diff algebra_simps)
     done
   have th0: "pochhammer (- (?a + ?b)) n = (- 1)^n * pochhammer (c - a) n"
-    unfolding pochhammer_minus[OF le_refl]
+    unfolding pochhammer_minus
     by (simp add: algebra_simps)
   have th1: "pochhammer (- ?b) n = (- 1)^n * pochhammer c n"
-    unfolding pochhammer_minus[OF le_refl]
+    unfolding pochhammer_minus
     by simp
   have nz: "pochhammer c n \<noteq> 0" using c
     by (simp add: pochhammer_eq_0_iff)
@@ -3630,7 +3628,7 @@ lemma fps_demoivre: "(fps_cos a + fps_const ii * fps_sin a)^n = fps_cos (of_nat 
 
 subsection {* Hypergeometric series *}
 
-definition "F as bs (c::'a::{field_char_0,field_inverse_zero}) =
+definition "F as bs (c::'a::{field_char_0,field}) =
   Abs_fps (\<lambda>n. (foldl (\<lambda>r a. r* pochhammer a n) 1 as * c^n) /
     (foldl (\<lambda>r b. r * pochhammer b n) 1 bs * of_nat (fact n)))"
 
@@ -3713,11 +3711,11 @@ lemma XDp_fps_integral [simp]: "XDp 0 (fps_integral a c) = X * a"
   by (simp add: fps_eq_iff fps_integral_def)
 
 lemma F_minus_nat:
-  "F [- of_nat n] [- of_nat (n + m)] (c::'a::{field_char_0,field_inverse_zero}) $ k =
+  "F [- of_nat n] [- of_nat (n + m)] (c::'a::{field_char_0,field}) $ k =
     (if k \<le> n then
       pochhammer (- of_nat n) k * c ^ k / (pochhammer (- of_nat (n + m)) k * of_nat (fact k))
      else 0)"
-  "F [- of_nat m] [- of_nat (m + n)] (c::'a::{field_char_0,field_inverse_zero}) $ k =
+  "F [- of_nat m] [- of_nat (m + n)] (c::'a::{field_char_0,field}) $ k =
     (if k \<le> m then
       pochhammer (- of_nat m) k * c ^ k / (pochhammer (- of_nat (m + n)) k * of_nat (fact k))
      else 0)"
@@ -3794,8 +3792,9 @@ proof
       with LIMSEQ_inverse_realpow_zero[of 2, simplified, simplified filterlim_iff,
         THEN spec, of "\<lambda>x. x < e"]
       have "eventually (\<lambda>i. inverse (2 ^ i) < e) sequentially"
+        unfolding eventually_nhds
         apply safe
-        apply (auto simp: eventually_nhds) --{*slow*}
+        apply auto --{*slow*}
         done
       then obtain i where "inverse (2 ^ i) < e" by (auto simp: eventually_sequentially)
       have "eventually (\<lambda>x. M i \<le> x) sequentially" by (auto simp: eventually_sequentially)

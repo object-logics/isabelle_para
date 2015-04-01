@@ -645,6 +645,29 @@ lemma sum_power2_gt_zero_iff:
   "0 < x\<^sup>2 + y\<^sup>2 \<longleftrightarrow> x \<noteq> 0 \<or> y \<noteq> 0"
   unfolding not_le [symmetric] by (simp add: sum_power2_le_zero_iff)
 
+lemma abs_le_square_iff:
+   "\<bar>x\<bar> \<le> \<bar>y\<bar> \<longleftrightarrow> x\<^sup>2 \<le> y\<^sup>2"
+proof
+  assume "\<bar>x\<bar> \<le> \<bar>y\<bar>"
+  then have "\<bar>x\<bar>\<^sup>2 \<le> \<bar>y\<bar>\<^sup>2" by (rule power_mono, simp)
+  then show "x\<^sup>2 \<le> y\<^sup>2" by simp
+next
+  assume "x\<^sup>2 \<le> y\<^sup>2"
+  then show "\<bar>x\<bar> \<le> \<bar>y\<bar>"
+    by (auto intro!: power2_le_imp_le [OF _ abs_ge_zero])
+qed
+
+lemma abs_square_le_1:"x\<^sup>2 \<le> 1 \<longleftrightarrow> abs(x) \<le> 1"
+  using abs_le_square_iff [of x 1]
+  by simp
+
+lemma abs_square_eq_1: "x\<^sup>2 = 1 \<longleftrightarrow> abs(x) = 1"
+  by (auto simp add: abs_if power2_eq_1_iff)
+  
+lemma abs_square_less_1: "x\<^sup>2 < 1 \<longleftrightarrow> abs(x) < 1"
+  using  abs_square_eq_1 [of x] abs_square_le_1 [of x]
+  by (auto simp add: le_less)
+
 end
 
 
@@ -682,7 +705,7 @@ lemma (in field) power_diff:
 
 text{*Perhaps these should be simprules.*}
 lemma power_inverse:
-  fixes a :: "'a::division_ring_inverse_zero"
+  fixes a :: "'a::division_ring"
   shows "inverse (a ^ n) = inverse a ^ n"
 apply (cases "a = 0")
 apply (simp add: power_0_left)
@@ -690,11 +713,11 @@ apply (simp add: nonzero_power_inverse)
 done (* TODO: reorient or rename to inverse_power *)
 
 lemma power_one_over:
-  "1 / (a::'a::{field_inverse_zero, power}) ^ n =  (1 / a) ^ n"
+  "1 / (a::'a::{field, power}) ^ n =  (1 / a) ^ n"
   by (simp add: divide_inverse) (rule power_inverse)
 
 lemma power_divide [field_simps, divide_simps]:
-  "(a / b) ^ n = (a::'a::field_inverse_zero) ^ n / b ^ n"
+  "(a / b) ^ n = (a::'a::field) ^ n / b ^ n"
 apply (cases "b = 0")
 apply (simp add: power_0_left)
 apply (rule nonzero_power_divide)
