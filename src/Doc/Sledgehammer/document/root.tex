@@ -167,12 +167,6 @@ There are three main ways to install automatic provers on your machine:
 already include properly setup executables for CVC4, E, SPASS, and Z3, ready to use.%
 \footnote{Vampire's license prevents us from doing the same for
 this otherwise remarkable tool.}
-For Z3, you must additionally set the variable
-\texttt{Z3\_NON\_COMMERCIAL} to \textit{yes} to confirm that you are a
-noncommercial user---either in the environment in which Isabelle is
-launched, in your \texttt{\$ISABELLE\_HOME\_USER/etc/settings} file, or
-via the ``Z3 Non Commercial'' option under ``Plugins > Plugin Options
-> Isabelle > General'' in Isabelle/jEdit.
 
 \item[\labelitemi] Alternatively, you can download the Isabelle-aware CVC3,
 CVC4, E, SPASS, and Z3 binary packages from \download. Extract the archives,
@@ -221,7 +215,7 @@ with CVC3 2.2 and 2.4.1, CVC4 1.5-prerelease, veriT smtcomp2014, and Z3 4.3.2.
 Since Z3's output format is somewhat unstable, other versions of the solver
 might not work well with Sledgehammer. Ideally, also set
 \texttt{CVC3\_VERSION}, \texttt{CVC4\_VERSION}, \texttt{VERIT\_VERSION}, or
-\texttt{Z3\_NEW\_VERSION} to the solver's version number (e.g., ``4.3.2'').
+\texttt{Z3\_VERSION} to the solver's version number (e.g., ``4.4.0'').
 \end{enum}
 \end{sloppy}
 
@@ -265,27 +259,22 @@ after a few seconds:
 
 \prew
 \slshape
-Sledgehammer: ``\textit{e\/}'' \\
+Sledgehammer: ``\textit{cvc4\/}'' \\
 Try this: \textbf{by} (\textit{metis last\_ConsL}) (64 ms). \\[3\smallskipamount]
 %
 Sledgehammer: ``\textit{z3\/}'' \\
 Try this: \textbf{by} (\textit{metis list.inject}) (20 ms). \\[3\smallskipamount]
 %
-Sledgehammer: ``\textit{vampire\/}'' \\
+Sledgehammer: ``\textit{remote\_vampire\/}'' \\
 Try this: \textbf{by} (\textit{metis hd.simps}) (14 ms). \\[3\smallskipamount]
 %
 Sledgehammer: ``\textit{spass\/}'' \\
 Try this: \textbf{by} (\textit{metis list.inject}) (17 ms). \\[3\smallskipamount]
-%
-Sledgehammer: ``\textit{remote\_e\_sine\/}'' \\
-Try this: \textbf{by} (\textit{metis hd.simps}) (18 ms).
 \postw
 
-Sledgehammer ran E, E-SInE, SPASS, Vampire, and Z3 in parallel. Depending on
-which provers are installed and how many processor cores are available, some of
-the provers might be missing or present with a \textit{remote\_} prefix.
-Waldmeister is run only for unit equational problems, where the goal's
-conclusion is a (universally quantified) equation.
+Sledgehammer ran CVC4, SPASS, Vampire, and Z3 in parallel. Depending on which
+provers are installed and how many processor cores are available, some of the
+provers might be missing or present with a \textit{remote\_} prefix.
 
 For each successful prover, Sledgehammer gives a one-line \textit{metis} or
 \textit{smt2} method call. Rough timings are shown in parentheses, indicating how
@@ -867,13 +856,8 @@ file name. Sledgehammer has been tested with version smtcomp2014.
 
 \item[\labelitemi] \textbf{\textit{z3}:} Z3 is an SMT solver developed at
 Microsoft Research \cite{z3}. To use Z3, set the environment variable
-\texttt{Z3\_NEW\_SOLVER} to the complete path of the executable, including the file
-name, and set \texttt{Z3\_NON\_COMMERCIAL} to \textit{yes} to confirm that you are a
-noncommercial user---either in the environment in which Isabelle is
-launched, in your \texttt{\$ISABELLE\_HOME\_USER/etc/settings} file, or
-via the ``Z3 Non Commercial'' option under ``Plugins > Plugin Options
-> Isabelle > General'' in Isabelle/jEdit. Sledgehammer has been tested with
-a pre-release version of 4.3.2.
+\texttt{Z3\_SOLVER} to the complete path of the executable, including the
+file name. Sledgehammer has been tested with a pre-release version of 4.4.0.
 
 \item[\labelitemi] \textbf{\textit{z3\_tptp}:} This version of Z3 pretends to be
 an ATP, exploiting Z3's support for the TPTP untyped and typed first-order
