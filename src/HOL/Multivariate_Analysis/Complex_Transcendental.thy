@@ -8,7 +8,6 @@ theory Complex_Transcendental
 imports  "~~/src/HOL/Multivariate_Analysis/Complex_Analysis_Basics"
 begin
 
-
 lemma cmod_add_real_less:
   assumes "Im z \<noteq> 0" "r\<noteq>0"
     shows "cmod (z + r) < cmod z + abs r"
@@ -613,6 +612,14 @@ lemma e_approx_32: "abs(exp(1) - 5837465777 / 2147483648) \<le> (inverse(2 ^ 32)
   apply (simp only: pos_le_divide_eq [symmetric], linarith)
   done
 
+lemma e_less_3: "exp 1 < (3::real)"
+  using e_approx_32
+  by (simp add: abs_if split: split_if_asm)
+
+lemma ln3_gt_1: "ln 3 > (1::real)"
+  by (metis e_less_3 exp_less_cancel_iff exp_ln_iff less_trans ln_exp)
+
+
 subsection{*The argument of a complex number*}
 
 definition Arg :: "complex \<Rightarrow> real" where
@@ -892,14 +899,17 @@ lemma holomorphic_on_tan: "(\<And>z. z \<in> s \<Longrightarrow> ~(cos z = 0)) \
 
 subsection{*Complex logarithms (the conventional principal value)*}
 
-definition Ln where
-   "Ln \<equiv> \<lambda>z. THE w. exp w = z & -pi < Im(w) & Im(w) \<le> pi"
+instantiation complex :: ln
+begin
+
+definition ln_complex :: "complex \<Rightarrow> complex"
+  where "ln_complex \<equiv> \<lambda>z. THE w. exp w = z & -pi < Im(w) & Im(w) \<le> pi"
 
 lemma
   assumes "z \<noteq> 0"
-    shows exp_Ln [simp]: "exp(Ln z) = z"
-      and mpi_less_Im_Ln: "-pi < Im(Ln z)"
-      and Im_Ln_le_pi:    "Im(Ln z) \<le> pi"
+    shows exp_Ln [simp]:  "exp(ln z) = z"
+      and mpi_less_Im_Ln: "-pi < Im(ln z)"
+      and Im_Ln_le_pi:    "Im(ln z) \<le> pi"
 proof -
   obtain \<psi> where z: "z / (cmod z) = Complex (cos \<psi>) (sin \<psi>)"
     using complex_unimodular_polar [of "z / (norm z)"] assms
@@ -907,22 +917,56 @@ proof -
   obtain \<phi> where \<phi>: "- pi < \<phi>" "\<phi> \<le> pi" "sin \<phi> = sin \<psi>" "cos \<phi> = cos \<psi>"
     using sincos_principal_value [of "\<psi>"] assms
     by (auto simp: norm_divide divide_simps)
-  have "exp(Ln z) = z & -pi < Im(Ln z) & Im(Ln z) \<le> pi" unfolding Ln_def
+  have "exp(ln z) = z & -pi < Im(ln z) & Im(ln z) \<le> pi" unfolding ln_complex_def
     apply (rule theI [where a = "Complex (ln(norm z)) \<phi>"])
     using z assms \<phi>
     apply (auto simp: field_simps exp_complex_eqI Exp_eq_polar cis.code)
     done
-  then show "exp(Ln z) = z" "-pi < Im(Ln z)" "Im(Ln z) \<le> pi"
+  then show "exp(ln z) = z" "-pi < Im(ln z)" "Im(ln z) \<le> pi"
     by auto
 qed
 
 lemma Ln_exp [simp]:
   assumes "-pi < Im(z)" "Im(z) \<le> pi"
-    shows "Ln(exp z) = z"
+    shows "ln(exp z) = z"
   apply (rule exp_complex_eqI)
   using assms mpi_less_Im_Ln  [of "exp z"] Im_Ln_le_pi [of "exp z"]
   apply auto
   done
+
+subsection{*Relation to Real Logarithm*}
+
+lemma Ln_of_real:
+  assumes "0 < z"
+    shows "ln(of_real z::complex) = of_real(ln z)"
+proof -
+  have "ln(of_real (exp (ln z))::complex) = ln (exp (of_real (ln z)))"
+    by (simp add: exp_of_real)
+  also have "... = of_real(ln z)"
+    using assms
+    by (subst Ln_exp) auto
+  finally show ?thesis
+    using assms by simp
+qed
+
+corollary Ln_in_Reals [simp]: "z \<in> \<real> \<Longrightarrow> Re z > 0 \<Longrightarrow> ln z \<in> \<real>"
+  by (auto simp: Ln_of_real elim: Reals_cases)
+
+lemma Ln_1: "ln 1 = (0::complex)"
+proof -
+  have "ln (exp 0) = (0::complex)"
+    by (metis (mono_tags, hide_lams) Ln_of_real exp_zero ln_one of_real_0 of_real_1 zero_less_one)
+  then show ?thesis
+    by simp
+qed
+
+instance
+  by intro_classes (rule ln_complex_def Ln_1)
+
+end
+
+abbreviation Ln :: "complex \<Rightarrow> complex"
+  where "Ln \<equiv> ln"
 
 lemma Ln_eq_iff: "w \<noteq> 0 \<Longrightarrow> z \<noteq> 0 \<Longrightarrow> (Ln w = Ln z \<longleftrightarrow> w = z)"
   by (metis exp_Ln)
@@ -940,6 +984,7 @@ lemma exists_complex_root:
   apply (rule_tac x= "exp(Ln(a) / n)" in exI)
   apply (auto simp: exp_of_nat_mult [symmetric])
   done
+
 
 subsection{*The Unwinding Number and the Ln-product Formula*}
 
@@ -1002,25 +1047,6 @@ lemma continuous_on_Ln [continuous_intros]: "(\<And>z. z \<in> s \<Longrightarro
 
 lemma holomorphic_on_Ln: "(\<And>z. z \<in> s \<Longrightarrow> Im(z) = 0 \<Longrightarrow> 0 < Re(z)) \<Longrightarrow> Ln holomorphic_on s"
   by (simp add: complex_differentiable_within_Ln holomorphic_on_def)
-
-
-subsection{*Relation to Real Logarithm*}
-
-lemma Ln_of_real:
-  assumes "0 < z"
-    shows "Ln(of_real z) = of_real(ln z)"
-proof -
-  have "Ln(of_real (exp (ln z))) = Ln (exp (of_real (ln z)))"
-    by (simp add: exp_of_real)
-  also have "... = of_real(ln z)"
-    using assms
-    by (subst Ln_exp) auto
-  finally show ?thesis
-    using assms by simp
-qed
-
-corollary Ln_in_Reals [simp]: "z \<in> \<real> \<Longrightarrow> Re z > 0 \<Longrightarrow> Ln z \<in> \<real>"
-  by (auto simp: Ln_of_real elim: Reals_cases)
 
 
 subsection{*Quadrant-type results for Ln*}
@@ -1128,8 +1154,8 @@ lemma cnj_Ln: "(Im z = 0 \<Longrightarrow> 0 < Re z) \<Longrightarrow> cnj(Ln z)
   apply (cases "z=0", auto)
   apply (rule exp_complex_eqI)
   apply (auto simp: abs_if split: split_if_asm)
-  apply (metis Im_Ln_less_pi add_mono_thms_linordered_field(5) cnj.simps(1) cnj.simps(2) mult_2 neg_equal_0_iff_equal)
-  apply (metis add_mono_thms_linordered_field(5) complex_cnj_zero_iff diff_0_right diff_minus_eq_add minus_diff_eq mpi_less_Im_Ln mult.commute mult_2_right neg_less_iff_less)
+  apply (metis Im_Ln_less_pi add_mono_thms_linordered_field(5) cnj.simps mult_2 neg_equal_0_iff_equal)
+  apply (metis complex_cnj_zero_iff diff_minus_eq_add diff_strict_mono minus_less_iff mpi_less_Im_Ln mult.commute mult_2_right)
   by (metis exp_Ln exp_cnj)
 
 lemma Ln_inverse: "(Im(z) = 0 \<Longrightarrow> 0 < Re z) \<Longrightarrow> Ln(inverse z) = -(Ln z)"
@@ -1140,14 +1166,6 @@ lemma Ln_inverse: "(Im(z) = 0 \<Longrightarrow> 0 < Re z) \<Longrightarrow> Ln(i
   apply (metis Im_Ln_less_pi Im_Ln_pos_le add_less_cancel_left add_strict_mono
                inverse_inverse_eq inverse_zero le_less mult.commute mult_2_right)
   done
-
-lemma Ln_1 [simp]: "Ln(1) = 0"
-proof -
-  have "Ln (exp 0) = 0"
-    by (metis exp_zero ln_exp Ln_of_real of_real_0 of_real_1 zero_less_one)
-  then show ?thesis
-    by simp
-qed
 
 lemma Ln_minus1 [simp]: "Ln(-1) = ii * pi"
   apply (rule exp_complex_eqI)
@@ -1240,6 +1258,91 @@ lemma Ln_times_ii:
   using Im_Ln_le_pi [of z] mpi_less_Im_Ln [of z] assms
         Im_Ln_eq_pi [of z] Im_Ln_pos_lt [of z] Re_Ln_pos_le [of z]
   by (auto simp: of_real_numeral Ln_times)
+
+
+
+subsection{*Complex Powers*}
+
+lemma powr_0 [simp]: "0 powr z = 0"
+  by (simp add: powr_def)
+
+lemma powr_to_1 [simp]: "z powr 1 = (z::complex)"
+  by (simp add: powr_def)
+
+lemma powr_nat:
+  fixes n::nat and z::complex shows "z powr n = (if z = 0 then 0 else z^n)"
+  by (simp add: exp_of_nat_mult powr_def)
+
+lemma powr_add:
+  fixes w::complex shows "w powr (z1 + z2) = w powr z1 * w powr z2"
+  by (simp add: powr_def algebra_simps exp_add)
+
+lemma powr_minus:
+  fixes w::complex shows  "w powr (-z) = inverse(w powr z)"
+  by (simp add: powr_def exp_minus)
+
+lemma powr_diff:
+  fixes w::complex shows  "w powr (z1 - z2) = w powr z1 / w powr z2"
+  by (simp add: powr_def algebra_simps exp_diff)
+
+lemma norm_powr_real: "w \<in> \<real> \<Longrightarrow> 0 < Re w \<Longrightarrow> norm(w powr z) = exp(Re z * ln(Re w))"
+  apply (simp add: powr_def)
+  using Im_Ln_eq_0 complex_is_Real_iff norm_complex_def
+  by auto
+
+lemma powr_real_real:
+    "\<lbrakk>w \<in> \<real>; z \<in> \<real>; 0 < Re w\<rbrakk> \<Longrightarrow> w powr z = exp(Re z * ln(Re w))"
+  apply (simp add: powr_def)
+  by (metis complex_eq complex_is_Real_iff diff_0 diff_0_right diff_minus_eq_add exp_ln exp_not_eq_zero
+       exp_of_real Ln_of_real mult_zero_right of_real_0 of_real_mult)
+
+lemma powr_of_real:
+  fixes x::real and y::real
+  shows "0 < x \<Longrightarrow> of_real x powr (of_real y::complex) = of_real (x powr y)"
+  by (simp add: powr_def) (metis exp_of_real of_real_mult Ln_of_real)
+
+lemma norm_powr_real_mono:
+    "\<lbrakk>w \<in> \<real>; 1 < Re w\<rbrakk>
+     \<Longrightarrow> cmod(w powr z1) \<le> cmod(w powr z2) \<longleftrightarrow> Re z1 \<le> Re z2"
+  by (auto simp: powr_def algebra_simps Reals_def Ln_of_real)
+
+lemma powr_times_real:
+    "\<lbrakk>x \<in> \<real>; y \<in> \<real>; 0 \<le> Re x; 0 \<le> Re y\<rbrakk>
+           \<Longrightarrow> (x * y) powr z = x powr z * y powr z"
+  by (auto simp: Reals_def powr_def Ln_times exp_add algebra_simps less_eq_real_def Ln_of_real)
+
+lemma has_field_derivative_powr:
+    "(Im z = 0 \<Longrightarrow> 0 < Re z)
+     \<Longrightarrow> ((\<lambda>z. z powr s) has_field_derivative (s * z powr (s - 1))) (at z)"
+  apply (cases "z=0", auto)
+  apply (simp add: powr_def)
+  apply (rule DERIV_transform_at [where d = "norm z" and f = "\<lambda>z. exp (s * Ln z)"])
+  apply (auto simp: dist_complex_def)
+  apply (intro derivative_eq_intros | simp add: assms)+
+  apply (simp add: field_simps exp_diff)
+  done
+
+lemma has_field_derivative_powr_right:
+    "w \<noteq> 0 \<Longrightarrow> ((\<lambda>z. w powr z) has_field_derivative Ln w * w powr z) (at z)"
+  apply (simp add: powr_def)
+  apply (intro derivative_eq_intros | simp add: assms)+
+  done
+
+lemma complex_differentiable_powr_right:
+    "w \<noteq> 0 \<Longrightarrow> (\<lambda>z. w powr z) complex_differentiable (at z)"
+using complex_differentiable_def has_field_derivative_powr_right by blast
+
+lemma holomorphic_on_powr_right:
+    "f holomorphic_on s \<Longrightarrow> w \<noteq> 0 \<Longrightarrow> (\<lambda>z. w powr (f z)) holomorphic_on s"
+    unfolding holomorphic_on_def
+    using DERIV_chain' complex_differentiable_def has_field_derivative_powr_right by fastforce
+
+lemma norm_powr_real_powr:
+  "w \<in> \<real> \<Longrightarrow> 0 < Re w \<Longrightarrow> norm(w powr z) = Re w powr Re z"
+  by (auto simp add: norm_powr_real powr_def Im_Ln_eq_0 complex_is_Real_iff in_Reals_norm)
+
+lemma cmod_Ln_Reals [simp]:"z \<in> Reals \<Longrightarrow> 0 < Re z \<Longrightarrow> cmod (Ln z) = norm (ln (Re z))"
+  using Ln_of_real by force
 
 
 subsection{*Relation between Square Root and exp/ln, hence its derivative*}
@@ -1335,10 +1438,6 @@ lemma continuous_within_closed_nontrivial:
     "closed s \<Longrightarrow> a \<notin> s ==> continuous (at a within s) f"
   using open_Compl
   by (force simp add: continuous_def eventually_at_topological filterlim_iff open_Collect_neg)
-
-lemma closed_Real_halfspace_Re_ge: "closed (\<real> \<inter> {w. x \<le> Re(w)})"
-  using closed_halfspace_Re_ge
-  by (simp add: closed_Int closed_complex_Reals)
 
 lemma continuous_within_csqrt_posreal:
     "continuous (at z within (\<real> \<inter> {w. 0 \<le> Re(w)})) csqrt"
@@ -1867,15 +1966,15 @@ lemma Arccos_cos:
              Re z = pi & Im z \<le> 0"
       shows "Arccos(cos z) = z"
 proof -
-  have *: "((\<i> - (Exp (\<i> * z))\<^sup>2 * \<i>) / (2 * Exp (\<i> * z))) = sin z"
+  have *: "((\<i> - (exp (\<i> * z))\<^sup>2 * \<i>) / (2 * exp (\<i> * z))) = sin z"
     by (simp add: sin_exp_eq exp_minus field_simps power2_eq_square)
-  have "1 - (exp (\<i> * z) + inverse (exp (\<i> * z)))\<^sup>2 / 4 = ((\<i> - (Exp (\<i> * z))\<^sup>2 * \<i>) / (2 * Exp (\<i> * z)))\<^sup>2"
+  have "1 - (exp (\<i> * z) + inverse (exp (\<i> * z)))\<^sup>2 / 4 = ((\<i> - (exp (\<i> * z))\<^sup>2 * \<i>) / (2 * exp (\<i> * z)))\<^sup>2"
     by (simp add: field_simps power2_eq_square)
   then have "Arccos(cos z) = - (\<i> * Ln ((exp (\<i> * z) + inverse (exp (\<i> * z))) / 2 +
-                           \<i> * csqrt (((\<i> - (Exp (\<i> * z))\<^sup>2 * \<i>) / (2 * Exp (\<i> * z)))\<^sup>2)))"
+                           \<i> * csqrt (((\<i> - (exp (\<i> * z))\<^sup>2 * \<i>) / (2 * exp (\<i> * z)))\<^sup>2)))"
     by (simp add: cos_exp_eq Arccos_def exp_minus)
   also have "... = - (\<i> * Ln ((exp (\<i> * z) + inverse (exp (\<i> * z))) / 2 +
-                              \<i> * ((\<i> - (Exp (\<i> * z))\<^sup>2 * \<i>) / (2 * Exp (\<i> * z)))))"
+                              \<i> * ((\<i> - (exp (\<i> * z))\<^sup>2 * \<i>) / (2 * exp (\<i> * z)))))"
     apply (subst csqrt_square)
     using assms Re_sin_pos [of z] Im_sin_nonneg [of z] Im_sin_nonneg2 [of z]
     apply (auto simp: * Re_sin Im_sin)
@@ -2176,5 +2275,220 @@ qed
 
 lemma of_real_arccos: "abs x \<le> 1 \<Longrightarrow> of_real(arccos x) = Arccos(of_real x)"
   by (metis Im_Arccos_of_real add.right_neutral arccos_eq_Re_Arccos complex_eq mult_zero_right of_real_0)
+
+subsection{*Some interrelationships among the real inverse trig functions.*}
+
+lemma arccos_arctan:
+  assumes "-1 < x" "x < 1"
+    shows "arccos x = pi/2 - arctan(x / sqrt(1 - x\<^sup>2))"
+proof -
+  have "arctan(x / sqrt(1 - x\<^sup>2)) - (pi/2 - arccos x) = 0"
+  proof (rule sin_eq_0_pi)
+    show "- pi < arctan (x / sqrt (1 - x\<^sup>2)) - (pi / 2 - arccos x)"
+      using arctan_lbound [of "x / sqrt(1 - x\<^sup>2)"]  arccos_bounded [of x] assms
+      by (simp add: algebra_simps)
+  next
+    show "arctan (x / sqrt (1 - x\<^sup>2)) - (pi / 2 - arccos x) < pi"
+      using arctan_ubound [of "x / sqrt(1 - x\<^sup>2)"]  arccos_bounded [of x] assms
+      by (simp add: algebra_simps)
+  next
+    show "sin (arctan (x / sqrt (1 - x\<^sup>2)) - (pi / 2 - arccos x)) = 0"
+      using assms
+      by (simp add: algebra_simps sin_diff cos_add sin_arccos sin_arctan cos_arctan
+                    power2_eq_square square_eq_1_iff)
+  qed
+  then show ?thesis
+    by simp
+qed
+
+lemma arcsin_plus_arccos:
+  assumes "-1 \<le> x" "x \<le> 1"
+    shows "arcsin x + arccos x = pi/2"
+proof -
+  have "arcsin x = pi/2 - arccos x"
+    apply (rule sin_inj_pi)
+    using assms arcsin [OF assms] arccos [OF assms]
+    apply (auto simp: algebra_simps sin_diff)
+    done
+  then show ?thesis
+    by (simp add: algebra_simps)
+qed
+
+lemma arcsin_arccos_eq: "-1 \<le> x \<Longrightarrow> x \<le> 1 \<Longrightarrow> arcsin x = pi/2 - arccos x"
+  using arcsin_plus_arccos by force
+
+lemma arccos_arcsin_eq: "-1 \<le> x \<Longrightarrow> x \<le> 1 \<Longrightarrow> arccos x = pi/2 - arcsin x"
+  using arcsin_plus_arccos by force
+
+lemma arcsin_arctan: "-1 < x \<Longrightarrow> x < 1 \<Longrightarrow> arcsin x = arctan(x / sqrt(1 - x\<^sup>2))"
+  by (simp add: arccos_arctan arcsin_arccos_eq)
+
+lemma zz: "csqrt (1 - (of_real x)\<^sup>2) = (if x^2 \<le> 1 then sqrt (1 - x^2) else \<i> * sqrt (x^2 - 1))"
+  by ( simp add: of_real_sqrt del: csqrt_of_real_nonneg)
+
+lemma arcsin_arccos_sqrt_pos: "0 \<le> x \<Longrightarrow> x \<le> 1 \<Longrightarrow> arcsin x = arccos(sqrt(1 - x\<^sup>2))"
+  apply (simp add: abs_square_le_1 diff_le_iff arcsin_eq_Re_Arcsin arccos_eq_Re_Arccos)
+  apply (subst Arcsin_Arccos_csqrt_pos)
+  apply (auto simp: power_le_one zz)
+  done
+
+lemma arcsin_arccos_sqrt_neg: "-1 \<le> x \<Longrightarrow> x \<le> 0 \<Longrightarrow> arcsin x = -arccos(sqrt(1 - x\<^sup>2))"
+  using arcsin_arccos_sqrt_pos [of "-x"]
+  by (simp add: arcsin_minus)
+
+lemma arccos_arcsin_sqrt_pos: "0 \<le> x \<Longrightarrow> x \<le> 1 \<Longrightarrow> arccos x = arcsin(sqrt(1 - x\<^sup>2))"
+  apply (simp add: abs_square_le_1 diff_le_iff arcsin_eq_Re_Arcsin arccos_eq_Re_Arccos)
+  apply (subst Arccos_Arcsin_csqrt_pos)
+  apply (auto simp: power_le_one zz)
+  done
+
+lemma arccos_arcsin_sqrt_neg: "-1 \<le> x \<Longrightarrow> x \<le> 0 \<Longrightarrow> arccos x = pi - arcsin(sqrt(1 - x\<^sup>2))"
+  using arccos_arcsin_sqrt_pos [of "-x"]
+  by (simp add: arccos_minus)
+
+subsection{*continuity results for arcsin and arccos.*}
+
+lemma continuous_on_Arcsin_real [continuous_intros]:
+    "continuous_on {w \<in> \<real>. \<bar>Re w\<bar> \<le> 1} Arcsin"
+proof -
+  have "continuous_on {w \<in> \<real>. \<bar>Re w\<bar> \<le> 1} (\<lambda>x. complex_of_real (arcsin (Re x))) =
+        continuous_on {w \<in> \<real>. \<bar>Re w\<bar> \<le> 1} (\<lambda>x. complex_of_real (Re (Arcsin (of_real (Re x)))))"
+    by (rule continuous_on_cong [OF refl]) (simp add: arcsin_eq_Re_Arcsin)
+  also have "... = ?thesis"
+    by (rule continuous_on_cong [OF refl]) simp
+  finally show ?thesis
+    using continuous_on_arcsin [OF continuous_on_Re [OF continuous_on_id], of "{w \<in> \<real>. \<bar>Re w\<bar> \<le> 1}"]
+          continuous_on_of_real
+    by fastforce
+qed
+
+lemma continuous_within_Arcsin_real:
+    "continuous (at z within {w \<in> \<real>. \<bar>Re w\<bar> \<le> 1}) Arcsin"
+proof (cases "z \<in> {w \<in> \<real>. \<bar>Re w\<bar> \<le> 1}")
+  case True then show ?thesis
+    using continuous_on_Arcsin_real continuous_on_eq_continuous_within
+    by blast
+next
+  case False
+  with closed_real_abs_le [of 1] show ?thesis
+    by (rule continuous_within_closed_nontrivial)
+qed
+
+lemma continuous_on_Arccos_real:
+    "continuous_on {w \<in> \<real>. \<bar>Re w\<bar> \<le> 1} Arccos"
+proof -
+  have "continuous_on {w \<in> \<real>. \<bar>Re w\<bar> \<le> 1} (\<lambda>x. complex_of_real (arccos (Re x))) =
+        continuous_on {w \<in> \<real>. \<bar>Re w\<bar> \<le> 1} (\<lambda>x. complex_of_real (Re (Arccos (of_real (Re x)))))"
+    by (rule continuous_on_cong [OF refl]) (simp add: arccos_eq_Re_Arccos)
+  also have "... = ?thesis"
+    by (rule continuous_on_cong [OF refl]) simp
+  finally show ?thesis
+    using continuous_on_arccos [OF continuous_on_Re [OF continuous_on_id], of "{w \<in> \<real>. \<bar>Re w\<bar> \<le> 1}"]
+          continuous_on_of_real
+    by fastforce
+qed
+
+lemma continuous_within_Arccos_real:
+    "continuous (at z within {w \<in> \<real>. \<bar>Re w\<bar> \<le> 1}) Arccos"
+proof (cases "z \<in> {w \<in> \<real>. \<bar>Re w\<bar> \<le> 1}")
+  case True then show ?thesis
+    using continuous_on_Arccos_real continuous_on_eq_continuous_within
+    by blast
+next
+  case False
+  with closed_real_abs_le [of 1] show ?thesis
+    by (rule continuous_within_closed_nontrivial)
+qed
+
+
+subsection{*Roots of unity*}
+
+lemma complex_root_unity:
+  fixes j::nat
+  assumes "n \<noteq> 0"
+    shows "exp(2 * of_real pi * \<i> * of_nat j / of_nat n)^n = 1"
+proof -
+  have *: "of_nat j * (complex_of_real pi * 2) = complex_of_real (2 * real j * pi)"
+    by (simp add: of_real_numeral)
+  then show ?thesis
+    apply (simp add: exp_of_nat_mult [symmetric] mult_ac exp_Euler)
+    apply (simp only: * cos_of_real sin_of_real)
+    apply (simp add: )
+    done
+qed
+
+lemma complex_root_unity_eq:
+  fixes j::nat and k::nat
+  assumes "1 \<le> n"
+    shows "(exp(2 * of_real pi * \<i> * of_nat j / of_nat n) = exp(2 * of_real pi * \<i> * of_nat k / of_nat n)
+           \<longleftrightarrow> j mod n = k mod n)"
+proof -
+    have "(\<exists>z::int. \<i> * (of_nat j * (of_real pi * 2)) =
+               \<i> * (of_nat k * (of_real pi * 2)) + \<i> * (of_int z * (of_nat n * (of_real pi * 2)))) \<longleftrightarrow>
+          (\<exists>z::int. of_nat j * (\<i> * (of_real pi * 2)) =
+              (of_nat k + of_nat n * of_int z) * (\<i> * (of_real pi * 2)))"
+      by (simp add: algebra_simps)
+    also have "... \<longleftrightarrow> (\<exists>z::int. of_nat j = of_nat k + of_nat n * (of_int z :: complex))"
+      by simp
+    also have "... \<longleftrightarrow> (\<exists>z::int. of_nat j = of_nat k + of_nat n * z)"
+      apply (rule HOL.iff_exI)
+      apply (auto simp: )
+      using of_int_eq_iff apply fastforce
+      by (metis of_int_add of_int_mult of_int_of_nat_eq)
+    also have "... \<longleftrightarrow> int j mod int n = int k mod int n"
+      by (auto simp: zmod_eq_dvd_iff dvd_def algebra_simps)
+    also have "... \<longleftrightarrow> j mod n = k mod n"
+      by (metis of_nat_eq_iff zmod_int)
+    finally have "(\<exists>z. \<i> * (of_nat j * (of_real pi * 2)) =
+             \<i> * (of_nat k * (of_real pi * 2)) + \<i> * (of_int z * (of_nat n * (of_real pi * 2)))) \<longleftrightarrow> j mod n = k mod n" .
+   note * = this
+  show ?thesis
+    using assms
+    by (simp add: exp_eq divide_simps mult_ac of_real_numeral *)
+qed
+
+corollary bij_betw_roots_unity:
+    "bij_betw (\<lambda>j. exp(2 * of_real pi * \<i> * of_nat j / of_nat n))
+              {..<n}  {exp(2 * of_real pi * \<i> * of_nat j / of_nat n) | j. j < n}"
+  by (auto simp: bij_betw_def inj_on_def complex_root_unity_eq)
+
+lemma complex_root_unity_eq_1:
+  fixes j::nat and k::nat
+  assumes "1 \<le> n"
+    shows "exp(2 * of_real pi * \<i> * of_nat j / of_nat n) = 1 \<longleftrightarrow> n dvd j"
+proof -
+  have "1 = exp(2 * of_real pi * \<i> * (of_nat n / of_nat n))"
+    using assms by simp
+  then have "exp(2 * of_real pi * \<i> * (of_nat j / of_nat n)) = 1 \<longleftrightarrow> j mod n = n mod n"
+     using complex_root_unity_eq [of n j n] assms
+     by simp
+  then show ?thesis
+    by auto
+qed
+
+lemma finite_complex_roots_unity_explicit:
+     "finite {exp(2 * of_real pi * \<i> * of_nat j / of_nat n) | j::nat. j < n}"
+by simp
+
+lemma card_complex_roots_unity_explicit:
+     "card {exp(2 * of_real pi * \<i> * of_nat j / of_nat n) | j::nat. j < n} = n"
+  by (simp add:  Finite_Set.bij_betw_same_card [OF bij_betw_roots_unity, symmetric])
+
+lemma complex_roots_unity:
+  assumes "1 \<le> n"
+    shows "{z::complex. z^n = 1} = {exp(2 * of_real pi * \<i> * of_nat j / of_nat n) | j::nat. j < n}"
+  apply (rule Finite_Set.card_seteq [symmetric])
+  using assms
+  apply (auto simp: card_complex_roots_unity_explicit finite_roots_unity complex_root_unity card_roots_unity)
+  done
+
+lemma card_complex_roots_unity: "1 \<le> n \<Longrightarrow> card {z::complex. z^n = 1} = n"
+  by (simp add: card_complex_roots_unity_explicit complex_roots_unity)
+
+lemma complex_not_root_unity:
+    "1 \<le> n \<Longrightarrow> \<exists>u::complex. norm u = 1 \<and> u^n \<noteq> 1"
+  apply (rule_tac x="exp (of_real pi * \<i> * of_real (1 / n))" in exI)
+  apply (auto simp: Re_complex_div_eq_0 exp_of_nat_mult [symmetric] mult_ac exp_Euler)
+  done
 
 end
