@@ -2321,7 +2321,7 @@ lemma tendsto_powr [tendsto_intros]:  (*FIXME a mess, suggests a general rule ab
   shows "\<lbrakk>(f ---> a) F; (g ---> b) F; a \<noteq> 0\<rbrakk> \<Longrightarrow> ((\<lambda>x. f x powr g x) ---> a powr b) F"
   apply (simp add: powr_def)
   apply (simp add: tendsto_def)
-  apply (simp add: Topological_Spaces.eventually_conj_iff )
+  apply (simp add: eventually_conj_iff )
   apply safe
   apply (case_tac "0 \<in> S")
   apply (auto simp: )
@@ -5201,7 +5201,7 @@ next
   then have wnz: "\<And>w. w \<noteq> 0 \<Longrightarrow> (\<Sum>i\<le>n. c (Suc i) * w^i) = 0"
     using Suc  by auto
   then have "(\<lambda>h. \<Sum>i\<le>n. c (Suc i) * h^i) -- 0 --> 0"
-    by (simp cong: LIM_cong)                   --{*the case @{term"w=0"} by continuity}*}
+    by (simp cong: LIM_cong)                   --{*the case @{term"w=0"} by continuity*}
   then have "(\<Sum>i\<le>n. c (Suc i) * 0^i) = 0"
     using isCont_polynom [of 0 "\<lambda>i. c (Suc i)" n] LIM_unique
     by (force simp add: Limits.isCont_iff)
