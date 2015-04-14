@@ -76,6 +76,8 @@ fun abs_rewr_cconv ident : subterm_position =
 
 val fun_rewr_cconv : subterm_position = fn rewr => CConv.fun_cconv oo rewr
 val arg_rewr_cconv : subterm_position = fn rewr => CConv.arg_cconv oo rewr
+val imp_rewr_cconv : subterm_position = fn rewr => CConv.concl_cconv 1 oo rewr
+val with_prems_rewr_cconv : subterm_position = fn rewr => CConv.with_prems_cconv ~1 oo rewr
 
 
 (* focus terms *)
@@ -102,9 +104,18 @@ fun ft_fun _ (tyenv, l $ _, pos) = (tyenv, l, pos o fun_rewr_cconv)
   | ft_fun ctxt (ft as (_, Abs (_, T, _ $ Bound 0), _)) = (ft_fun ctxt o ft_abs ctxt (NONE, T)) ft
   | ft_fun _ (_, t, _) = raise TERM ("ft_fun", [t])
 
-fun ft_arg _ (tyenv, _ $ r, pos) = (tyenv, r, pos o arg_rewr_cconv)
-  | ft_arg ctxt (ft as (_, Abs (_, T, _ $ Bound 0), _)) = (ft_arg ctxt o ft_abs ctxt (NONE, T)) ft
-  | ft_arg _ (_, t, _) = raise TERM ("ft_arg", [t])
+local
+
+fun ft_arg_gen cconv _ (tyenv, _ $ r, pos) = (tyenv, r, pos o cconv)
+  | ft_arg_gen cconv ctxt (ft as (_, Abs (_, T, _ $ Bound 0), _)) = (ft_arg_gen cconv ctxt o ft_abs ctxt (NONE, T)) ft
+  | ft_arg_gen _ _ (_, t, _) = raise TERM ("ft_arg", [t])
+
+in
+
+val ft_arg = ft_arg_gen arg_rewr_cconv
+val ft_imp = ft_arg_gen imp_rewr_cconv
+
+end
 
 (* Move to B in !!x_1 ... x_n. B. Do not eta-expand *)
 fun ft_params ctxt (ft as (_, t, _) : focusterm) =
@@ -141,49 +152,34 @@ fun ft_for ctxt idents (ft as (_, t, _) : focusterm) =
 
 fun ft_concl ctxt (ft as (_, t, _) : focusterm) =
   case t of
-    (Const (@{const_name "Pure.imp"}, _) $ _) $ _ => (ft_concl ctxt o ft_arg ctxt) ft
+    (Const (@{const_name "Pure.imp"}, _) $ _) $ _ => (ft_concl ctxt o ft_imp ctxt) ft
   | _ => ft
 
-fun ft_assm ctxt (ft as (_, t, _) : focusterm) =
-  case t of
-    (Const (@{const_name "Pure.imp"}, _) $ _) $ _ => (ft_concl ctxt o ft_arg ctxt o ft_fun ctxt) ft
-  | _ => raise TERM ("ft_assm", [t])
+fun ft_assm _ (tyenv, (Const (@{const_name "Pure.imp"}, _) $ l) $ _, pos) =
+      (tyenv, l, pos o with_prems_rewr_cconv)
+  | ft_assm _ (_, t, _) = raise TERM ("ft_assm", [t])
 
 fun ft_judgment ctxt (ft as (_, t, _) : focusterm) =
   if Object_Logic.is_judgment ctxt t
   then ft_arg ctxt ft
   else ft
 
-
-(* Return a lazy sequenze of all subterms of the focusterm for which
-   the condition holds. *)
-fun find_subterms ctxt condition (ft as (_, t, _) : focusterm) =
-  let
-    val recurse = find_subterms ctxt condition
-    val recursive_matches =
-      case t of
-        _ $ _ => Seq.append (ft |> ft_fun ctxt |> recurse) (ft |> ft_arg ctxt |> recurse)
-      | Abs (_,T,_) => ft |> ft_abs ctxt (NONE, T) |> recurse
-      | _ => Seq.empty
-  in
-    (* If the condition is met, then the current focusterm is part of the
-       sequence of results. Otherwise, only the results of the recursive
-       application are. *)
-    if condition ft
-    then Seq.cons ft recursive_matches
-    else recursive_matches
-  end
-
 (* Find all subterms that might be a valid point to apply a rule. *)
-fun valid_match_points ctxt =
+fun valid_match_points ctxt (ft : focusterm) =
   let
+    fun descend (_, _ $ _, _) = [ft_fun ctxt, ft_arg ctxt]
+      | descend (_, Abs (_, T, _), _) = [ft_abs ctxt (NONE, T)]
+      | descend _ = []
+    fun subseq ft =
+      descend ft |> Seq.of_list |> Seq.maps (fn f => ft |> f |> valid_match_points ctxt)
     fun is_valid (l $ _) = is_valid l
       | is_valid (Abs (_, _, a)) = is_valid a
       | is_valid (Var _) = false
       | is_valid (Bound _) = false
       | is_valid _ = true
   in
-    find_subterms ctxt (#2 #> is_valid )
+    Seq.make (fn () => SOME (ft, subseq ft))
+    |> Seq.filter (#2 #> is_valid)
   end
 
 fun is_hole (Var ((name, _), _)) = (name = holeN)
@@ -243,14 +239,16 @@ fun find_matches ctxt pattern_list =
             | SOME ft => SOME ft
       in desc eta_expands ft end
 
-    fun seq_unfold f ft =
-      case f ft of
-        NONE => Seq.empty
-      | SOME ft' => Seq.cons ft' (seq_unfold f ft')
+    fun move_assms ctxt (ft: focusterm) =
+      let
+        fun f () = case try (ft_assm ctxt) ft of
+            NONE => NONE
+          | SOME ft' => SOME (ft', move_assms ctxt (ft_imp ctxt ft))
+      in Seq.make f end
 
     fun apply_pat At = Seq.map (ft_judgment ctxt)
       | apply_pat In = Seq.maps (valid_match_points ctxt)
-      | apply_pat Asm = Seq.maps (seq_unfold (try (ft_assm ctxt)) o ft_params ctxt)
+      | apply_pat Asm = Seq.maps (move_assms ctxt o ft_params ctxt)
       | apply_pat Concl = Seq.map (ft_concl ctxt o ft_params ctxt)
       | apply_pat (For idents) = Seq.map_filter ((ft_for ctxt (map (apfst SOME) idents)))
       | apply_pat (Term x) = Seq.map_filter ( (move_term ctxt x))
@@ -297,7 +295,7 @@ fun inst_thm ctxt idents (to, tyenv) thm =
           | subst _ t = t
       in Term.map_aterms (subst idents) end
 
-    val maxidx = Envir.maxidx_of env |> fold Term.maxidx_term (map_filter I [to])
+    val maxidx = Envir.maxidx_of env |> fold Term.maxidx_term (the_list to)
     val thm' = Thm.incr_indexes (maxidx + 1) thm
   in SOME (inst_thm_to ctxt (Option.map replace_idents to, env) thm') end
   handle NO_TO_MATCH => NONE
@@ -454,7 +452,7 @@ val _ =
             fun mk_free_constrs (Term (t, cs)) = t :: map free_constr cs
               | mk_free_constrs _ = []
 
-            val ts = maps mk_free_constrs ps @ map_filter I [to]
+            val ts = maps mk_free_constrs ps @ the_list to
               |> Syntax.check_terms (hole_syntax ctxt)
             val ctxt' = fold Variable.declare_term ts ctxt
             val (ps', (to', ts')) = fold_map (reinsert_pat ctxt') ps ts

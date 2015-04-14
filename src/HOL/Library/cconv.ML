@@ -33,6 +33,7 @@ sig
   val rewrs_cconv: thm list -> cconv
   val params_cconv: int -> (Proof.context -> cconv) -> Proof.context -> cconv
   val prems_cconv: int -> cconv -> cconv
+  val with_prems_cconv: int -> cconv -> cconv
   val concl_cconv: int -> cconv -> cconv
   val fconv_rule: cconv -> thm -> thm
   val gconv_rule: cconv -> int -> thm -> thm
@@ -95,10 +96,11 @@ fun rewr_cconv rule ct =
     val rule2 = Thm.rename_boundvars (Thm.term_of lhs) (Thm.term_of ct) rule1
     val rule3 = Thm.instantiate (Thm.match (lhs, ct)) rule2
                 handle Pattern.MATCH => raise CTERM ("rewr_cconv", [lhs, ct])
+    val concl = rule3 |> Thm.cprop_of |> Drule.strip_imp_concl
     val rule4 =
-      if concl_lhs_of rule3 aconvc ct then rule3
-      else let val ceq = Thm.dest_fun2 (Thm.cprop_of rule3)
-           in rule3 COMP Thm.trivial (Thm.mk_binop ceq ct (concl_rhs_of rule3)) end
+      if Thm.dest_equals_lhs concl aconvc ct then rule3
+      else let val ceq = Thm.dest_fun2 concl
+           in rule3 RS Thm.trivial (Thm.mk_binop ceq ct (Thm.dest_equals_rhs concl)) end
   in
     transitive rule4 (Thm.beta_conversion true (concl_rhs_of rule4))
   end
@@ -125,9 +127,9 @@ fun abs_cconv cv ctxt ct =
          fun abstract_rule u v eq =
            let
              (* Take a variable v and an equality theorem of form:
-                  P1 Pure.imp ... Pure.imp Pn Pure.imp L v == R v
+                  P1 \<Longrightarrow> ... \<Longrightarrow> Pn \<Longrightarrow> L v \<equiv> R v
                 And build a term of form:
-                  !!v. (%x. L x) v == (%x. R x) v *)
+                  \<And>v. (\<lambda>x. L x) v \<equiv> (\<lambda>x. R x) v *)
              fun mk_concl var eq =
                let
                  val certify = Thm.cterm_of ctxt
@@ -164,7 +166,7 @@ val fun2_cconv = fun_cconv o fun_cconv
 
 (* conversions on HHF rules *)
 
-(*rewrite B in !!x1 ... xn. B*)
+(*rewrite B in \<And>x1 ... xn. B*)
 fun params_cconv n cv ctxt ct =
   if n <> 0 andalso Logic.is_all (Thm.term_of ct)
   then arg_cconv (abs_cconv (params_cconv (n - 1) cv o #2) ctxt) ct
@@ -172,7 +174,7 @@ fun params_cconv n cv ctxt ct =
 
 (* TODO: This code behaves not exactly like Conv.prems_cconv does.
          Fix this! *)
-(*rewrite the A's in A1 Pure.imp ... Pure.imp An Pure.imp B*)
+(*rewrite the A's in A1 \<Longrightarrow> ... \<Longrightarrow> An \<Longrightarrow> B*)
 fun prems_cconv 0 cv ct = cv ct
   | prems_cconv n cv ct =
       (case ct |> Thm.term_of of
@@ -180,12 +182,33 @@ fun prems_cconv 0 cv ct = cv ct
           ((if n = 1 then fun_cconv else I) o arg_cconv) (prems_cconv (n-1) cv) ct
       | _ =>  cv ct)
 
-(*rewrite B in A1 Pure.imp ... Pure.imp An Pure.imp B*)
+fun inst_imp_cong ct = Thm.instantiate ([], [(@{cpat "?A :: prop"}, ct)]) Drule.imp_cong
+
+(*rewrite B in A1 \<Longrightarrow> ... \<Longrightarrow> An \<Longrightarrow> B*)
 fun concl_cconv 0 cv ct = cv ct
   | concl_cconv n cv ct =
-      (case ct |> Thm.term_of of
-        (Const (@{const_name "Pure.imp"}, _) $ _) $ _ => arg_cconv (concl_cconv (n-1) cv) ct
-      | _ =>  cv ct)
+      (case try Thm.dest_implies ct of
+        NONE => cv ct
+      | SOME (A,B) => (concl_cconv (n-1) cv B) RS inst_imp_cong A)
+
+(* Rewrites A in A \<Longrightarrow> A1 \<Longrightarrow> An \<Longrightarrow> B.
+   The premises of the resulting theorem assume A1, ..., An
+   *)
+fun with_prems_cconv n cv ct =
+  let
+    fun strip_prems 0 As B = (As, B)
+      | strip_prems i As B =
+          case try Thm.dest_implies B of
+            NONE => (As, B)
+          | SOME (A,B) => strip_prems (i - 1) (A::As) B
+    val (prem, (prems, concl)) = ct |> Thm.dest_implies ||> strip_prems n [] 
+    val rewr_imp_concl = Thm.instantiate ([], [(@{cpat "?C :: prop"}, concl)]) @{thm rewr_imp}
+    val th1 = cv prem RS rewr_imp_concl
+    val nprems = Thm.nprems_of th1
+    fun inst_cut_rl ct = Thm.instantiate ([], [(@{cpat "?psi :: prop"}, ct)]) cut_rl
+    fun f p th = (th RS inst_cut_rl p)
+      |> Conv.fconv_rule (Conv.concl_conv nprems (Conv.rewr_conv @{thm imp_cong_eq}))
+  in fold f prems th1 end
 
 (*forward conversion, cf. FCONV_RULE in LCF*)
 fun fconv_rule cv th =
