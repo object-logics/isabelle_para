@@ -174,21 +174,24 @@ val get_rules_once_split =
     THEN (forward_tac [refl_imp])
 
 fun do_split ctxt split =
-  let
-    val split' = split RS iffD1;
-    val split_rhs = Thm.concl_of (hd (snd (fst (Variable.import false [split'] ctxt))))
-  in if was_split split_rhs
-     then DETERM (apply_split ctxt split') THEN get_rules_once_split
-     else raise TERM ("malformed split rule", [split_rhs])
-  end
+  case try op RS (split, iffD1) of
+    NONE => raise TERM ("malformed split rule", [Thm.prop_of split])
+  | SOME split' =>
+      let val split_rhs = Thm.concl_of (hd (snd (fst (Variable.import false [split'] ctxt))))
+      in if was_split split_rhs
+         then DETERM (apply_split ctxt split') THEN get_rules_once_split
+         else raise TERM ("malformed split rule", [split_rhs])
+      end
 
 val atomize_meta_eq = forward_tac [meta_eq_to_obj_eq]
 
 in
 
 fun gen_to_simps ctxt splitthms thm =
-  Seq.list_of ((TRY atomize_meta_eq
-                 THEN (REPEAT (FIRST (map (do_split ctxt) splitthms)))) thm)
+  let val splitthms' = filter (fn t => not (Thm.eq_thm (t, Drule.dummy_thm))) splitthms
+  in
+    Seq.list_of ((TRY atomize_meta_eq THEN (REPEAT (FIRST (map (do_split ctxt) splitthms')))) thm)
+  end
 
 fun to_simps ctxt thm =
   let
