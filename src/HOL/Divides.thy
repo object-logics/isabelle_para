@@ -22,7 +22,7 @@ class semiring_div = semidom + div +
     and div_mult_mult1 [simp]: "c \<noteq> 0 \<Longrightarrow> (c * a) div (c * b) = a div b"
 begin
 
-subclass semidom_divide
+subclass algebraic_semidom
 proof
   fix b a
   assume "b \<noteq> 0"
@@ -131,9 +131,6 @@ qed
 lemma mod_self [simp]: "a mod a = 0"
   using mod_mult_self2_is_0 [of 1] by simp
 
-lemma div_self [simp]: "a \<noteq> 0 \<Longrightarrow> a div a = 1"
-  using div_mult_self2_is_id [of _ 1] by simp
-
 lemma div_add_self1 [simp]:
   assumes "b \<noteq> 0"
   shows "(b + a) div b = a div b + 1"
@@ -214,18 +211,6 @@ proof -
     by (simp only: mod_div_equality')
   finally show ?thesis .
 qed
-
-lemma dvd_div_mult_self [simp]:
-  "a dvd b \<Longrightarrow> (b div a) * a = b"
-  using mod_div_equality [of b a, symmetric] by simp
-
-lemma dvd_mult_div_cancel [simp]:
-  "a dvd b \<Longrightarrow> a * (b div a) = b"
-  using dvd_div_mult_self by (simp add: ac_simps)
-
-lemma dvd_div_mult:
-  "a dvd b \<Longrightarrow> (b div a) * c = (b * c) div a"
-  by (cases "a = 0") (auto elim!: dvdE simp add: mult.assoc)
 
 lemma div_dvd_div [simp]:
   assumes "a dvd b" and "a dvd c"
@@ -362,15 +347,6 @@ lemma div_mult_div_if_dvd:
   apply (simp add: no_zero_divisors)
   done
 
-lemma div_mult_swap:
-  assumes "c dvd b"
-  shows "a * (b div c) = (a * b) div c"
-proof -
-  from assms have "b div c * (a div 1) = b * a div (c * 1)"
-    by (simp only: div_mult_div_if_dvd one_dvd)
-  then show ?thesis by (simp add: mult.commute)
-qed
-   
 lemma div_mult_mult2 [simp]:
   "c \<noteq> 0 \<Longrightarrow> (a * c) div (b * c) = a div b"
   by (drule div_mult_mult1) (simp add: mult.commute)
@@ -1913,6 +1889,10 @@ next
 qed
 
 end
+
+lemma is_unit_int:
+  "is_unit (k::int) \<longleftrightarrow> k = 1 \<or> k = - 1"
+  by auto
 
 text{*Basic laws about division and remainder*}
 
