@@ -1068,7 +1068,7 @@ We only need to deal with one case because the @{thm[source] ev0} case is imposs
 The form of the @{text IH} shows us that internally the lemma was expanded as explained
 above: \noquotes{@{prop[source]"ev x \<Longrightarrow> x = Suc m \<Longrightarrow> \<not> ev m"}}.
 \item
-The goal @{prop"\<not> ev (Suc n)"} may suprise. The expanded version of the lemma
+The goal @{prop"\<not> ev (Suc n)"} may surprise. The expanded version of the lemma
 would suggest that we have a \isacom{fix} @{text m} \isacom{assume} @{prop"Suc(Suc n) = Suc m"}
 and need to show @{prop"\<not> ev m"}. What happened is that Isabelle immediately
 simplified @{prop"Suc(Suc n) = Suc m"} to @{prop"Suc n = m"} and could then eliminate
@@ -1104,7 +1104,7 @@ text{*
 \begin{exercise}
 Give a structured proof of @{prop "\<not> ev(Suc(Suc(Suc 0)))"}
 by rule inversions. If there are no cases to be proved you can close
-a proof immediateley with \isacom{qed}.
+a proof immediately with \isacom{qed}.
 \end{exercise}
 
 \begin{exercise}
@@ -1117,6 +1117,17 @@ required induction.
 \begin{exercise}
 Define a recursive function @{text "elems ::"} @{typ"'a list \<Rightarrow> 'a set"}
 and prove @{prop "x : elems xs \<Longrightarrow> \<exists>ys zs. xs = ys @ x # zs \<and> x \<notin> elems ys"}.
+\end{exercise}
+
+\begin{exercise}
+Extend Exercise~\ref{exe:cfg} with a function that checks if some
+\mbox{@{text "alpha list"}} is a balanced
+string of parentheses. More precisely, define a recursive function
+@{text "balanced :: nat \<Rightarrow> alpha list \<Rightarrow> bool"} such that @{term"balanced n w"}
+is true iff (informally) @{text"a\<^sup>n @ w \<in> S"}. Formally, prove
+@{prop "balanced n w \<longleftrightarrow> replicate n a @ w \<in> S"} where
+@{const replicate} @{text"::"} @{typ"nat \<Rightarrow> 'a \<Rightarrow> 'a list"} is predefined
+and @{term"replicate n x"} yields the list @{text"[x, \<dots>, x]"} of length @{text n}.
 \end{exercise}
 *}
 
