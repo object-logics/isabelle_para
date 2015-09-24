@@ -1000,8 +1000,29 @@ The @{text "[relator_distr]"} attribute is set by the @{text lifting} plugin
 The @{text "[relator_mono]"} attribute is set by the @{text lifting} plugin
 (Section~\ref{ssec:lifting}).
 
+\item[@{text "t."}\hthm{rel_mono_strong}\rm:] ~ \\
+@{thm list.rel_mono_strong[no_vars]}
+
+\item[@{text "t."}\hthm{rel_cong} @{text "[fundef_cong]"}\rm:] ~ \\
+@{thm list.rel_cong[no_vars]}
+
+\item[@{text "t."}\hthm{rel_cong_simp}\rm:] ~ \\
+@{thm list.rel_cong_simp[no_vars]}
+
 \item[@{text "t."}\hthm{rel_refl}\rm:] ~ \\
 @{thm list.rel_refl[no_vars]}
+
+\item[@{text "t."}\hthm{rel_refl_strong}\rm:] ~ \\
+@{thm list.rel_refl_strong[no_vars]}
+
+\item[@{text "t."}\hthm{rel_reflp}\rm:] ~ \\
+@{thm list.rel_reflp[no_vars]}
+
+\item[@{text "t."}\hthm{rel_symp}\rm:] ~ \\
+@{thm list.rel_symp[no_vars]}
+
+\item[@{text "t."}\hthm{rel_transp}\rm:] ~ \\
+@{thm list.rel_transp[no_vars]}
 
 \item[@{text "t."}\hthm{rel_transfer} @{text "[transfer_rule]"}\rm:] ~ \\
 @{thm list.rel_transfer[no_vars]} \\
