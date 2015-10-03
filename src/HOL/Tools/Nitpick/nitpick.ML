@@ -22,7 +22,6 @@ sig
      monos: (typ option * bool option) list,
      wfs: ((string * typ) option * bool option) list,
      sat_solver: string,
-     blocking: bool,
      falsify: bool,
      debug: bool,
      verbose: bool,
@@ -106,7 +105,6 @@ type params =
    monos: (typ option * bool option) list,
    wfs: ((string * typ) option * bool option) list,
    sat_solver: string,
-   blocking: bool,
    falsify: bool,
    debug: bool,
    verbose: bool,
@@ -636,7 +634,7 @@ fun pick_them_nits_in_term deadline state (params : params) mode i n step
                (if genuine then
                   if falsify then "CounterSatisfiable" else "Satisfiable"
                 else
-                  "Unknown") ^ "\n" ^
+                  "GaveUp") ^ "\n" ^
                "% SZS output start FiniteModel")
         val (reconstructed_model, codatatypes_ok) =
           reconstruct_hol_model
