@@ -220,8 +220,7 @@ text %quotetypewriter \<open>
 
 (*>*) text \<open>
   Fortunately, an even more succint approach is available using command
-  @{command permanent_interpretation}.  This is available
-  by importing theory @{file "~~/src/Tools/Permanent_Interpretation.thy"}.
+  @{command permanent_interpretation}.
   Then the pattern above collapses to
 \<close> (*<*)
 
@@ -230,7 +229,7 @@ hide_const (open) funpows
 
 (*>*)
 permanent_interpretation %quote fun_power: power "(\<lambda>n (f :: 'a \<Rightarrow> 'a). f ^^ n)"
-  defining funpows = "fun_power.powers :: nat list \<Rightarrow> ('a \<Rightarrow> 'a) \<Rightarrow> 'a \<Rightarrow> 'a"
+  defines funpows = "fun_power.powers :: nat list \<Rightarrow> ('a \<Rightarrow> 'a) \<Rightarrow> 'a \<Rightarrow> 'a"
   by unfold_locales
     (simp_all add: fun_eq_iff funpow_mult mult.commute) (*<*)
 

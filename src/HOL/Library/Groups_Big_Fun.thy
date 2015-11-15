@@ -5,7 +5,6 @@ section \<open>Big sum and product over function bodies\<close>
 theory Groups_Big_Fun
 imports
   Main
-  "~~/src/Tools/Permanent_Interpretation"
 begin
 
 subsection \<open>Abstract product\<close>
@@ -226,7 +225,7 @@ where
   "Sum_any = comm_monoid_fun.G plus 0"
 
 permanent_interpretation Sum_any: comm_monoid_fun plus 0
-where
+rewrites
   "comm_monoid_fun.G plus 0 = Sum_any" and
   "comm_monoid_set.F plus 0 = setsum"
 proof -
@@ -299,7 +298,7 @@ where
   "Prod_any = comm_monoid_fun.G times 1"
 
 permanent_interpretation Prod_any: comm_monoid_fun times 1
-where
+rewrites
   "comm_monoid_fun.G times 1 = Prod_any" and
   "comm_monoid_set.F times 1 = setprod"
 proof -
