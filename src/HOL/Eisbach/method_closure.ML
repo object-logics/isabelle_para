@@ -20,9 +20,9 @@ sig
   val eval_method: Proof.context -> (term list * string list) * Method.text ->
     term list -> (string * thm list) list -> (Proof.context -> Method.method) list ->
     Proof.context -> Method.method
-  val method_definition: binding -> (binding * typ option * mixfix) list ->
+  val method: binding -> (binding * typ option * mixfix) list ->
     binding list -> binding list -> binding list -> Token.src -> local_theory -> local_theory
-  val method_definition_cmd: binding -> (binding * string option * mixfix) list ->
+  val method_cmd: binding -> (binding * string option * mixfix) list ->
     binding list -> binding list -> binding list -> Token.src -> local_theory -> local_theory
 end;
 
@@ -147,30 +147,23 @@ fun check_attrib ctxt attrib =
   in (named_thm, parser) end;
 
 
-fun instantiate_text env text =
-  let val morphism = Morphism.term_morphism "instantiate_text" (Envir.norm_term env);
-  in (Method.map_source o map) (Token.transform morphism) text end;
-
-fun evaluate_dynamic_thm ctxt name =
-  (case try (Named_Theorems.get ctxt) name of
-    SOME thms => thms
-  | NONE => Proof_Context.get_thms ctxt name);
-
-
-fun evaluate_named_theorems ctxt =
-  (Method.map_source o map o Token.map_facts)
-    (fn SOME name => K (evaluate_dynamic_thm ctxt name) | NONE => I);
-
-fun method_evaluate text ctxt facts =
-  let val ctxt' = Config.put Method.closure false ctxt in
-    Method.RUNTIME (fn st => Method.evaluate (evaluate_named_theorems ctxt' text) ctxt' facts st)
-  end;
-
-fun evaluate_method_def fix_env raw_text ctxt =
+fun method_evaluate text ctxt =
   let
-    val text = raw_text
-      |> instantiate_text fix_env;
-  in method_evaluate text ctxt end;
+    val text' =
+      text |> (Method.map_source o map o Token.map_facts)
+        (fn SOME name =>
+              (case Proof_Context.lookup_fact ctxt name of
+                SOME (false, ths) => K ths
+              | _ => I)
+          | NONE => I);
+    val ctxt' = Config.put Method.closure false ctxt;
+  in fn facts => Method.RUNTIME (fn st => Method.evaluate text' ctxt' facts st) end;
+
+fun method_instantiate env text =
+  let
+    val morphism = Morphism.term_morphism "instantiate_text" (Envir.norm_term env);
+    val text' = (Method.map_source o map) (Token.transform morphism) text;
+  in method_evaluate text' end;
 
 fun setup_local_method binding lthy =
   let
@@ -182,21 +175,10 @@ fun setup_local_method binding lthy =
     |> Method.local_setup binding (Scan.succeed get_method) "(internal)"
   end;
 
-fun setup_local_fact binding = Named_Theorems.declare binding "";
-
-(* FIXME: In general we need the ability to override all dynamic facts.
-   This is also slow: we need Named_Theorems.only *)
-fun empty_named_thm named_thm ctxt =
-  let
-    val contents = Named_Theorems.get ctxt named_thm;
-    val attrib = snd oo Thm.proof_attributes [Named_Theorems.del named_thm];
-  in fold attrib contents ctxt end;
-
-fun dummy_named_thm named_thm ctxt =
-  let
-    val ctxt' = empty_named_thm named_thm ctxt;
-    val (_, ctxt'') = Thm.proof_attributes [Named_Theorems.add named_thm] Drule.free_dummy_thm ctxt';
-  in ctxt'' end;
+fun dummy_named_thm named_thm =
+  Context.proof_map
+    (Named_Theorems.clear named_thm
+      #> Named_Theorems.add_thm named_thm Drule.free_dummy_thm);
 
 fun parse_method_args method_names =
   let
@@ -247,25 +229,31 @@ fun eval_method ctxt0 header fixes attribs methods =
 
     val setup_ctxt = fold add_thms attribs
       #> fold update_dynamic_method (hmethods ~~ methods)
-      #> put_recursive_method (fn fixes => evaluate_method_def (match fixes) text);
+      #> put_recursive_method (fn xs => method_instantiate (match xs) text);
   in
-    fn ctxt => evaluate_method_def (match fixes) text (setup_ctxt ctxt)
+    fn ctxt => method_instantiate (match fixes) text (setup_ctxt ctxt)
   end;
 
-fun gen_method_definition add_fixes name vars uses attribs methods source lthy =
+
+
+(** Isar command **)
+
+local
+
+fun gen_method add_fixes name vars uses declares methods source lthy =
   let
-    val (uses_nms, lthy1) = lthy
+    val (uses_internal, lthy1) = lthy
       |> Proof_Context.concealed
       |> Local_Theory.open_target |-> Proof_Context.private_scope
       |> Local_Theory.map_background_naming (Name_Space.add_path (Binding.name_of name))
       |> Config.put Method.old_section_parser true
       |> fold setup_local_method methods
-      |> fold_map setup_local_fact uses;
+      |> fold_map (fn b => Named_Theorems.declare b "") uses;
 
     val (term_args, lthy2) = lthy1
       |> add_fixes vars |-> fold_map Proof_Context.inferred_param |>> map Free;
 
-    val (named_thms, modifiers) = map (check_attrib lthy2) (attribs @ uses) |> split_list;
+    val (named_thms, modifiers) = map (check_attrib lthy2) (declares @ uses) |> split_list;
     val self_name :: method_names = map (Local_Theory.full_name lthy2) (name :: methods);
 
     fun parser args eval =
@@ -273,7 +261,7 @@ fun gen_method_definition add_fixes name vars uses attribs methods source lthy =
       (parse_term_args args --
         parse_method_args method_names --|
         (Scan.depend (fn context =>
-              Scan.succeed (Context.map_proof (fold empty_named_thm uses_nms) context, ())) --
+          Scan.succeed (fold Named_Theorems.clear uses_internal context, ())) --
          Method.sections modifiers) >> eval);
 
     val lthy3 = lthy2
@@ -295,7 +283,7 @@ fun gen_method_definition add_fixes name vars uses attribs methods source lthy =
     val term_args' = map (Morphism.term morphism) term_args;
 
     fun real_exec ts ctxt =
-      evaluate_method_def (match_term_args ctxt term_args' ts) text' ctxt;
+      method_instantiate (match_term_args ctxt term_args' ts) text' ctxt;
     val real_parser =
       parser term_args' (fn (fixes, decl) => fn ctxt =>
         real_exec fixes (put_recursive_method real_exec (decl ctxt)));
@@ -307,8 +295,12 @@ fun gen_method_definition add_fixes name vars uses attribs methods source lthy =
     |> add_method name ((term_args', named_thms, method_names), text')
   end;
 
-val method_definition = gen_method_definition Proof_Context.add_fixes;
-val method_definition_cmd = gen_method_definition Proof_Context.add_fixes_cmd;
+in
+
+val method = gen_method Proof_Context.add_fixes;
+val method_cmd = gen_method Proof_Context.add_fixes_cmd;
+
+end;
 
 val _ =
   Outer_Syntax.local_theory @{command_keyword method} "Eisbach method definition"
@@ -316,8 +308,8 @@ val _ =
       ((Scan.optional (@{keyword "methods"} |-- Parse.!!! (Scan.repeat1 Parse.binding)) []) --
         (Scan.optional (@{keyword "uses"} |-- Parse.!!! (Scan.repeat1 Parse.binding)) [])) --
       (Scan.optional (@{keyword "declares"} |-- Parse.!!! (Scan.repeat1 Parse.binding)) []) --
-      Parse.!!! (@{keyword "="} |-- Parse.args1 (K true))
-      >> (fn ((((name, vars), (methods, uses)), attribs), src) =>
-        method_definition_cmd name vars uses attribs methods src));
+      Parse.!!! (@{keyword "="} |-- Parse.args1 (K true)) >>
+      (fn ((((name, vars), (methods, uses)), declares), src) =>
+        method_cmd name vars uses declares methods src));
 
 end;
