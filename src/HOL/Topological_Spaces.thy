@@ -11,7 +11,6 @@ begin
 
 named_theorems continuous_intros "structural introduction rules for continuity"
 
-
 subsection \<open>Topological space\<close>
 
 class "open" =
@@ -103,7 +102,7 @@ lemma open_Collect_disj: assumes "open {x. P x}" "open {x. Q x}" shows "open {x.
   using open_Un[OF assms] by (simp add: Un_def)
 
 lemma open_Collect_ex: "(\<And>i. open {x. P i x}) \<Longrightarrow> open {x. \<exists>i. P i x}"
-  using open_UN[of UNIV "\<lambda>i. {x. P i x}"] unfolding Collect_ex_eq by simp 
+  using open_UN[of UNIV "\<lambda>i. {x. P i x}"] unfolding Collect_ex_eq by simp
 
 lemma open_Collect_imp: "closed {x. P x} \<Longrightarrow> open {x. Q x} \<Longrightarrow> open {x. P x \<longrightarrow> Q x}"
   unfolding imp_conv_disj by (intro open_Collect_disj open_Collect_neg)
@@ -121,7 +120,7 @@ lemma closed_Collect_disj: assumes "closed {x. P x}" "closed {x. Q x}" shows "cl
   using closed_Un[OF assms] by (simp add: Un_def)
 
 lemma closed_Collect_all: "(\<And>i. closed {x. P i x}) \<Longrightarrow> closed {x. \<forall>i. P i x}"
-  using closed_INT[of UNIV "\<lambda>i. {x. P i x}"] unfolding Collect_all_eq by simp 
+  using closed_INT[of UNIV "\<lambda>i. {x. P i x}"] unfolding Collect_all_eq by simp
 
 lemma closed_Collect_imp: "open {x. P x} \<Longrightarrow> closed {x. Q x} \<Longrightarrow> closed {x. P x \<longrightarrow> Q x}"
   unfolding imp_conv_disj by (intro closed_Collect_disj closed_Collect_neg)
@@ -204,9 +203,9 @@ inductive generate_topology for S where
 | UN: "(\<And>k. k \<in> K \<Longrightarrow> generate_topology S k) \<Longrightarrow> generate_topology S (\<Union>K)"
 | Basis: "s \<in> S \<Longrightarrow> generate_topology S s"
 
-hide_fact (open) UNIV Int UN Basis 
+hide_fact (open) UNIV Int UN Basis
 
-lemma generate_topology_Union: 
+lemma generate_topology_Union:
   "(\<And>k. k \<in> I \<Longrightarrow> generate_topology S (K k)) \<Longrightarrow> generate_topology S (\<Union>k\<in>I. K k)"
   using generate_topology.UN [of "K ` I"] by auto
 
@@ -345,7 +344,7 @@ lemma (in topological_space) nhds_generated_topology:
 proof (safe intro!: antisym INF_greatest)
   fix S assume "generate_topology T S" "x \<in> S"
   then show "(INF S:{S \<in> T. x \<in> S}. principal S) \<le> principal S"
-    by induction 
+    by induction
        (auto intro: INF_lower order_trans simp add: inf_principal[symmetric] simp del: inf_principal)
 qed (auto intro!: INF_lower intro: generate_topology.intros)
 
@@ -353,7 +352,7 @@ lemma (in topological_space) eventually_nhds:
   "eventually P (nhds a) \<longleftrightarrow> (\<exists>S. open S \<and> a \<in> S \<and> (\<forall>x\<in>S. P x))"
   unfolding nhds_def by (subst eventually_INF_base) (auto simp: eventually_principal)
 
-lemma (in topological_space) eventually_nhds_in_open: 
+lemma (in topological_space) eventually_nhds_in_open:
   "open s \<Longrightarrow> x \<in> s \<Longrightarrow> eventually (\<lambda>y. y \<in> s) (nhds x)"
   by (subst eventually_nhds) blast
 
@@ -392,7 +391,7 @@ lemma at_within_nhd:
 proof (intro allI eventually_subst)
   have "eventually (\<lambda>x. x \<in> S) (nhds x)"
     using \<open>x \<in> S\<close> \<open>open S\<close> by (auto simp: eventually_nhds)
-  then show "\<forall>\<^sub>F n in nhds x. (n \<noteq> x \<longrightarrow> n \<in> T \<longrightarrow> P n) = (n \<noteq> x \<longrightarrow> n \<in> U \<longrightarrow> P n)" for P  
+  then show "\<forall>\<^sub>F n in nhds x. (n \<noteq> x \<longrightarrow> n \<in> T \<longrightarrow> P n) = (n \<noteq> x \<longrightarrow> n \<in> U \<longrightarrow> P n)" for P
     by eventually_elim (insert \<open>T \<inter> S - {x} = U \<inter> S - {x}\<close>, blast)
 qed
 
@@ -413,14 +412,14 @@ lemma at_neq_bot [simp]: "at (a::'a::perfect_space) \<noteq> bot"
 lemma (in order_topology) nhds_order: "nhds x =
   inf (INF a:{x <..}. principal {..< a}) (INF a:{..< x}. principal {a <..})"
 proof -
-  have 1: "{S \<in> range lessThan \<union> range greaterThan. x \<in> S} = 
+  have 1: "{S \<in> range lessThan \<union> range greaterThan. x \<in> S} =
       (\<lambda>a. {..< a}) ` {x <..} \<union> (\<lambda>a. {a <..}) ` {..< x}"
     by auto
   show ?thesis
     unfolding nhds_generated_topology[OF open_generated_order] INF_union 1 INF_image comp_def ..
 qed
 
-lemma (in linorder_topology) at_within_order: "UNIV \<noteq> {x} \<Longrightarrow> 
+lemma (in linorder_topology) at_within_order: "UNIV \<noteq> {x} \<Longrightarrow>
   at x within s = inf (INF a:{x <..}. principal ({..< a} \<inter> s - {x}))
                       (INF a:{..< x}. principal ({a <..} \<inter> s - {x}))"
 proof (cases "{x <..} = {}" "{..< x} = {}" rule: case_split[case_product case_split])
@@ -473,7 +472,7 @@ lemma trivial_limit_at_right_real [simp]:
   by safe (auto simp add: trivial_limit_def eventually_at_right dest: dense)
 
 lemma at_eq_sup_left_right: "at (x::'a::linorder_topology) = sup (at_left x) (at_right x)"
-  by (auto simp: eventually_at_filter filter_eq_iff eventually_sup 
+  by (auto simp: eventually_at_filter filter_eq_iff eventually_sup
            elim: eventually_elim2 eventually_mono)
 
 lemma eventually_at_split:
@@ -693,8 +692,6 @@ lemma tendsto_ge_const:
   by (rule tendsto_le [OF F tendsto_const x a])
 
 
-
-
 subsubsection \<open>Rules about @{const Lim}\<close>
 
 lemma tendsto_Lim:
@@ -907,7 +904,7 @@ proof cases
     by (intro dependent_nat_choice) (auto simp: conj_commute)
   then obtain f where "subseq f" and mono: "\<And>n m. f n \<le> m \<Longrightarrow> s m \<le> s (f n)"
     by (auto simp: subseq_Suc_iff)
-  moreover 
+  moreover
   then have "incseq f"
     unfolding subseq_Suc_iff incseq_Suc_iff by (auto intro: less_imp_le)
   then have "monoseq (\<lambda>n. s (f n))"
@@ -966,7 +963,7 @@ lemma subseq_imp_inj_on: "subseq g \<Longrightarrow> inj_on g A"
 proof (rule inj_onI)
   assume g: "subseq g"
   fix x y assume "g x = g y"
-  with subseq_mono[OF g, of x y] subseq_mono[OF g, of y x] show "x = y" 
+  with subseq_mono[OF g, of x y] subseq_mono[OF g, of y x] show "x = y"
     by (cases x y rule: linorder_cases) simp_all
 qed
 
@@ -980,7 +977,7 @@ lemma decseq_imp_monoseq:  "decseq X \<Longrightarrow> monoseq X"
   by (simp add: decseq_def monoseq_def)
 
 lemma decseq_eq_incseq:
-  fixes X :: "nat \<Rightarrow> 'a::ordered_ab_group_add" shows "decseq X = incseq (\<lambda>n. - X n)" 
+  fixes X :: "nat \<Rightarrow> 'a::ordered_ab_group_add" shows "decseq X = incseq (\<lambda>n. - X n)"
   by (simp add: decseq_def incseq_def)
 
 lemma INT_decseq_offset:
@@ -1182,10 +1179,10 @@ proof (rule ccontr)
 qed
 
 lemma (in first_countable_topology) eventually_nhds_within_iff_sequentially:
-  "eventually P (inf (nhds a) (principal s)) \<longleftrightarrow> 
+  "eventually P (inf (nhds a) (principal s)) \<longleftrightarrow>
     (\<forall>f. (\<forall>n. f n \<in> s) \<and> f \<longlonglongrightarrow> a \<longrightarrow> eventually (\<lambda>n. P (f n)) sequentially)"
 proof (safe intro!: sequentially_imp_eventually_nhds_within)
-  assume "eventually P (inf (nhds a) (principal s))" 
+  assume "eventually P (inf (nhds a) (principal s))"
   then obtain S where "open S" "a \<in> S" "\<forall>x\<in>S. x \<in> s \<longrightarrow> P x"
     by (auto simp: eventually_inf_principal eventually_nhds)
   moreover fix f assume "\<forall>n. f n \<in> s" "f \<longlonglongrightarrow> a"
@@ -1627,7 +1624,7 @@ lemma isCont_o[continuous_intros]: "isCont f a \<Longrightarrow> isCont g (f a) 
 
 lemma isCont_tendsto_compose: "isCont g l \<Longrightarrow> (f \<longlongrightarrow> l) F \<Longrightarrow> ((\<lambda>x. g (f x)) \<longlongrightarrow> g l) F"
   unfolding isCont_def by (rule tendsto_compose)
-  
+
 lemma continuous_on_tendsto_compose:
   assumes f_cont: "continuous_on s f"
   assumes g: "(g \<longlongrightarrow> l) F"
@@ -1660,7 +1657,7 @@ proof safe
     unfolding eventually_nhds by (intro exI[of _ "f`S"]) (auto intro!: open_map)
 qed (metis filterlim_iff tendsto_at_iff_tendsto_nhds isCont_def eventually_filtermap cont)
 
-lemma continuous_at_split: 
+lemma continuous_at_split:
   "continuous (at (x::'a::linorder_topology)) f = (continuous (at_left x) f \<and> continuous (at_right x) f)"
   by (simp add: continuous_within filterlim_at_split)
 
@@ -1912,7 +1909,7 @@ lemma connected_sing [simp]: "connected {x}"
   by (auto intro!: connectedI)
 
 lemma connectedD:
-  "connected A \<Longrightarrow> open U \<Longrightarrow> open V \<Longrightarrow> U \<inter> V \<inter> A = {} \<Longrightarrow> A \<subseteq> U \<union> V \<Longrightarrow> U \<inter> A = {} \<or> V \<inter> A = {}" 
+  "connected A \<Longrightarrow> open U \<Longrightarrow> open V \<Longrightarrow> U \<inter> V \<inter> A = {} \<Longrightarrow> A \<subseteq> U \<union> V \<Longrightarrow> U \<inter> A = {} \<or> V \<inter> A = {}"
   by (auto simp: connected_def)
 
 end
@@ -2212,7 +2209,7 @@ lemma connected_Ico[simp]: "connected {a ..< b::'a::linear_continuum_topology}"
 lemma connected_Icc[simp]: "connected {a .. b::'a::linear_continuum_topology}"
   unfolding connected_iff_interval by auto
 
-lemma connected_contains_Ioo: 
+lemma connected_contains_Ioo:
   fixes A :: "'a :: linorder_topology set"
   assumes A: "connected A" "a \<in> A" "b \<in> A" shows "{a <..< b} \<subseteq> A"
   using connectedD_interval[OF A] by (simp add: subset_eq Ball_def less_imp_le)
@@ -2434,5 +2431,178 @@ proof (rule antisym)
     qed
   qed
 qed (intro cSUP_least \<open>antimono f\<close>[THEN antimonoD] cInf_lower S)
+
+subsection \<open>Uniform spaces\<close>
+
+class uniformity =
+  fixes uniformity :: "('a \<times> 'a) filter"
+begin
+
+abbreviation uniformity_on :: "'a set \<Rightarrow> ('a \<times> 'a) filter" where
+  "uniformity_on s \<equiv> inf uniformity (principal (s\<times>s))"
+
+end
+
+lemma uniformity_Abort:
+  "uniformity = Abs_filter (\<lambda>P. Code.abort (STR ''uniformity is not executable'') (\<lambda>x. Rep_filter uniformity P))"
+  unfolding Code.abort_def Rep_filter_inverse ..
+
+class open_uniformity = "open" + uniformity +
+  assumes open_uniformity: "\<And>U. open U \<longleftrightarrow> (\<forall>x\<in>U. eventually (\<lambda>(x', y). x' = x \<longrightarrow> y \<in> U) uniformity)"
+
+class uniform_space = open_uniformity +
+  assumes uniformity_refl: "eventually E uniformity \<Longrightarrow> E (x, x)"
+  assumes uniformity_sym: "eventually E uniformity \<Longrightarrow> eventually (\<lambda>(x, y). E (y, x)) uniformity"
+  assumes uniformity_trans: "eventually E uniformity \<Longrightarrow> \<exists>D. eventually D uniformity \<and> (\<forall>x y z. D (x, y) \<longrightarrow> D (y, z) \<longrightarrow> E (x, z))"
+begin
+
+subclass topological_space
+  proof qed (force elim: eventually_mono eventually_elim2 simp: split_beta' open_uniformity)+
+
+lemma uniformity_bot: "uniformity \<noteq> bot"
+  using uniformity_refl by auto
+
+lemma uniformity_trans':
+  "eventually E uniformity \<Longrightarrow> eventually (\<lambda>((x, y), (y', z)). y = y' \<longrightarrow> E (x, z)) (uniformity \<times>\<^sub>F uniformity)"
+  by (drule uniformity_trans) (auto simp add: eventually_prod_same)
+
+lemma uniformity_transE:
+  assumes E: "eventually E uniformity"
+  obtains D where "eventually D uniformity" "\<And>x y z. D (x, y) \<Longrightarrow> D (y, z) \<Longrightarrow> E (x, z)"
+  using uniformity_trans[OF E] by auto
+
+lemma eventually_nhds_uniformity:
+  "eventually P (nhds x) \<longleftrightarrow> eventually (\<lambda>(x', y). x' = x \<longrightarrow> P y) uniformity" (is "_ \<longleftrightarrow> ?N P x")
+  unfolding eventually_nhds
+proof safe
+  assume *: "?N P x"
+  { fix x assume "?N P x"
+    then guess D by (rule uniformity_transE) note D = this
+    from D(1) have "?N (?N P) x"
+      by eventually_elim (insert D, force elim: eventually_mono split: prod.split) }
+  then have "open {x. ?N P x}"
+    by (simp add: open_uniformity)
+  then show "\<exists>S. open S \<and> x \<in> S \<and> (\<forall>x\<in>S. P x)"
+    by (intro exI[of _ "{x. ?N P x}"]) (auto dest: uniformity_refl simp: *)
+qed (force simp add: open_uniformity elim: eventually_mono)
+
+subsubsection \<open>Totally bounded sets\<close>
+
+definition totally_bounded :: "'a set \<Rightarrow> bool" where
+  "totally_bounded S \<longleftrightarrow>
+    (\<forall>E. eventually E uniformity \<longrightarrow> (\<exists>X. finite X \<and> (\<forall>s\<in>S. \<exists>x\<in>X. E (x, s))))"
+
+lemma totally_bounded_empty[iff]: "totally_bounded {}"
+  by (auto simp add: totally_bounded_def)
+
+lemma totally_bounded_subset: "totally_bounded S \<Longrightarrow> T \<subseteq> S \<Longrightarrow> totally_bounded T"
+  by (force simp add: totally_bounded_def)
+
+lemma totally_bounded_Union[intro]:
+  assumes M: "finite M" "\<And>S. S \<in> M \<Longrightarrow> totally_bounded S" shows "totally_bounded (\<Union>M)"
+  unfolding totally_bounded_def
+proof safe
+  fix E assume "eventually E uniformity"
+  with M obtain X where "\<forall>S\<in>M. finite (X S) \<and> (\<forall>s\<in>S. \<exists>x\<in>X S. E (x, s))"
+    by (metis totally_bounded_def)
+  with `finite M` show "\<exists>X. finite X \<and> (\<forall>s\<in>\<Union>M. \<exists>x\<in>X. E (x, s))"
+    by (intro exI[of _ "\<Union>S\<in>M. X S"]) force
+qed
+
+subsubsection \<open>Cauchy filter\<close>
+
+definition cauchy_filter :: "'a filter \<Rightarrow> bool" where
+  "cauchy_filter F \<longleftrightarrow> F \<times>\<^sub>F F \<le> uniformity"
+
+definition Cauchy :: "(nat \<Rightarrow> 'a) \<Rightarrow> bool" where
+  Cauchy_uniform: "Cauchy X = cauchy_filter (filtermap X sequentially)"
+
+lemma Cauchy_uniform_iff:
+  "Cauchy X \<longleftrightarrow> (\<forall>P. eventually P uniformity \<longrightarrow> (\<exists>N. \<forall>n\<ge>N. \<forall>m\<ge>N. P (X n, X m)))"
+  unfolding Cauchy_uniform cauchy_filter_def le_filter_def eventually_prod_same
+    eventually_filtermap eventually_sequentially
+proof safe
+  let ?U = "\<lambda>P. eventually P uniformity"
+  { fix P assume "?U P" "\<forall>P. ?U P \<longrightarrow> (\<exists>Q. (\<exists>N. \<forall>n\<ge>N. Q (X n)) \<and> (\<forall>x y. Q x \<longrightarrow> Q y \<longrightarrow> P (x, y)))"
+    then obtain Q N where "\<And>n. n \<ge> N \<Longrightarrow> Q (X n)" "\<And>x y. Q x \<Longrightarrow> Q y \<Longrightarrow> P (x, y)"
+      by metis
+    then show "\<exists>N. \<forall>n\<ge>N. \<forall>m\<ge>N. P (X n, X m)"
+      by blast }
+  { fix P assume "?U P" and P: "\<forall>P. ?U P \<longrightarrow> (\<exists>N. \<forall>n\<ge>N. \<forall>m\<ge>N. P (X n, X m))"
+    then obtain Q where "?U Q" and Q: "\<And>x y z. Q (x, y) \<Longrightarrow> Q (y, z) \<Longrightarrow> P (x, z)"
+      by (auto elim: uniformity_transE)
+    then have "?U (\<lambda>x. Q x \<and> (\<lambda>(x, y). Q (y, x)) x)"
+      unfolding eventually_conj_iff by (simp add: uniformity_sym)
+    from P[rule_format, OF this]
+    obtain N where N: "\<And>n m. n \<ge> N \<Longrightarrow> m \<ge> N \<Longrightarrow> Q (X n, X m) \<and> Q (X m, X n)"
+      by auto
+    show "\<exists>Q. (\<exists>N. \<forall>n\<ge>N. Q (X n)) \<and> (\<forall>x y. Q x \<longrightarrow> Q y \<longrightarrow> P (x, y))"
+    proof (safe intro!: exI[of _ "\<lambda>x. \<forall>n\<ge>N. Q (x, X n) \<and> Q (X n, x)"] exI[of _ N] N)
+      fix x y assume "\<forall>n\<ge>N. Q (x, X n) \<and> Q (X n, x)" "\<forall>n\<ge>N. Q (y, X n) \<and> Q (X n, y)"
+      then have "Q (x, X N)" "Q (X N, y)" by auto
+      then show "P (x, y)"
+        by (rule Q)
+    qed }
+qed
+
+lemma nhds_imp_cauchy_filter:
+  assumes *: "F \<le> nhds x" shows "cauchy_filter F"
+proof -
+  have "F \<times>\<^sub>F F \<le> nhds x \<times>\<^sub>F nhds x"
+    by (intro prod_filter_mono *)
+  also have "\<dots> \<le> uniformity"
+    unfolding le_filter_def eventually_nhds_uniformity eventually_prod_same
+  proof safe
+    fix P assume "eventually P uniformity"
+    then guess Ql by (rule uniformity_transE) note Ql = this
+    moreover note Ql(1)[THEN uniformity_sym]
+    ultimately show "\<exists>Q. eventually (\<lambda>(x', y). x' = x \<longrightarrow> Q y) uniformity \<and> (\<forall>x y. Q x \<longrightarrow> Q y \<longrightarrow> P (x, y))"
+      by (rule_tac exI[of _ "\<lambda>y. Ql (y, x) \<and> Ql (x, y)"]) (fastforce elim: eventually_elim2)
+  qed
+  finally show ?thesis
+    by (simp add: cauchy_filter_def)
+qed
+
+lemma LIMSEQ_imp_Cauchy: "X \<longlonglongrightarrow> x \<Longrightarrow> Cauchy X"
+  unfolding Cauchy_uniform filterlim_def by (intro nhds_imp_cauchy_filter)
+
+lemma Cauchy_subseq_Cauchy: assumes "Cauchy X" "subseq f" shows "Cauchy (X \<circ> f)"
+  unfolding Cauchy_uniform comp_def filtermap_filtermap[symmetric] cauchy_filter_def
+  by (rule order_trans[OF _ \<open>Cauchy X\<close>[unfolded Cauchy_uniform cauchy_filter_def]])
+     (intro prod_filter_mono filtermap_mono filterlim_subseq[OF \<open>subseq f\<close>, unfolded filterlim_def])
+
+lemma convergent_Cauchy: "convergent X \<Longrightarrow> Cauchy X"
+  unfolding convergent_def by (erule exE, erule LIMSEQ_imp_Cauchy)
+
+definition complete :: "'a set \<Rightarrow> bool" where
+  complete_uniform: "complete S \<longleftrightarrow> (\<forall>F \<le> principal S. F \<noteq> bot \<longrightarrow> cauchy_filter F \<longrightarrow> (\<exists>x\<in>S. F \<le> nhds x))"
+
+end
+
+subsubsection \<open>Uniformly continuous functions\<close>
+
+definition uniformly_continuous_on :: "'a set \<Rightarrow> ('a::uniform_space \<Rightarrow> 'b::uniform_space) \<Rightarrow> bool" where
+  uniformly_continuous_on_uniformity: "uniformly_continuous_on s f \<longleftrightarrow>
+    (LIM (x, y) (uniformity_on s). (f x, f y) :> uniformity)"
+
+lemma uniformly_continuous_onD:
+  "uniformly_continuous_on s f \<Longrightarrow> eventually E uniformity
+    \<Longrightarrow> eventually (\<lambda>(x, y). x \<in> s \<longrightarrow> y \<in> s \<longrightarrow> E (f x, f y)) uniformity"
+  by (simp add: uniformly_continuous_on_uniformity filterlim_iff eventually_inf_principal split_beta' mem_Times_iff imp_conjL)
+
+lemma uniformly_continuous_on_const[continuous_intros]: "uniformly_continuous_on s (\<lambda>x. c)"
+  by (auto simp: uniformly_continuous_on_uniformity filterlim_iff uniformity_refl)
+
+lemma uniformly_continuous_on_id[continuous_intros]: "uniformly_continuous_on s (\<lambda>x. x)"
+  by (auto simp: uniformly_continuous_on_uniformity filterlim_def)
+
+lemma uniformly_continuous_on_compose[continuous_intros]:
+  "uniformly_continuous_on s g \<Longrightarrow> uniformly_continuous_on (g`s) f \<Longrightarrow> uniformly_continuous_on s (\<lambda>x. f (g x))"
+  using filterlim_compose[of "\<lambda>(x, y). (f x, f y)" uniformity "uniformity_on (g`s)"  "\<lambda>(x, y). (g x, g y)" "uniformity_on s"]
+  by (simp add: split_beta' uniformly_continuous_on_uniformity filterlim_inf filterlim_principal eventually_inf_principal mem_Times_iff)
+
+lemma uniformly_continuous_imp_continuous: assumes f: "uniformly_continuous_on s f" shows "continuous_on s f"
+  by (auto simp: filterlim_iff eventually_at_filter eventually_nhds_uniformity continuous_on_def
+           elim: eventually_mono dest!: uniformly_continuous_onD[OF f])
 
 end
