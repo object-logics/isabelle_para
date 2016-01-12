@@ -525,9 +525,18 @@ lemma Diff_Inter[intro]: "A - \<Inter>S = \<Union>{A - s|s. s\<in>S}"
 
 lemma closedin_Inter[intro]:
   assumes Ke: "K \<noteq> {}"
-    and Kc: "\<forall>S \<in>K. closedin U S"
+    and Kc: "\<And>S. S \<in>K \<Longrightarrow> closedin U S"
   shows "closedin U (\<Inter>K)"
   using Ke Kc unfolding closedin_def Diff_Inter by auto
+
+lemma closedin_INT[intro]:
+  assumes "A \<noteq> {}" "\<And>x. x \<in> A \<Longrightarrow> closedin U (B x)"
+  shows "closedin U (\<Inter>x\<in>A. B x)"
+  unfolding Inter_image_eq [symmetric]
+  apply (rule closedin_Inter)
+  using assms
+  apply auto
+  done
 
 lemma closedin_Int[intro]: "closedin U S \<Longrightarrow> closedin U T \<Longrightarrow> closedin U (S \<inter> T)"
   using closedin_Inter[of "{S,T}" U] by auto
@@ -2322,6 +2331,13 @@ lemma Lim_within: "(f \<longlongrightarrow> l) (at a within S) \<longleftrightar
     (\<forall>e >0. \<exists>d>0. \<forall>x \<in> S. 0 < dist x a \<and> dist x a  < d \<longrightarrow> dist (f x) l < e)"
   by (auto simp add: tendsto_iff eventually_at)
 
+corollary Lim_withinI [intro?]:
+  assumes "\<And>e. e > 0 \<Longrightarrow> \<exists>d>0. \<forall>x \<in> S. 0 < dist x a \<and> dist x a < d \<longrightarrow> dist (f x) l \<le> e"
+  shows "(f \<longlongrightarrow> l) (at a within S)"
+apply (simp add: Lim_within, clarify)
+apply (rule ex_forward [OF assms [OF half_gt_zero]], auto)
+done
+
 lemma Lim_at: "(f \<longlongrightarrow> l) (at a) \<longleftrightarrow>
     (\<forall>e >0. \<exists>d>0. \<forall>x. 0 < dist x a \<and> dist x a < d  \<longrightarrow> dist (f x) l < e)"
   by (auto simp add: tendsto_iff eventually_at2)
@@ -2329,6 +2345,13 @@ lemma Lim_at: "(f \<longlongrightarrow> l) (at a) \<longleftrightarrow>
 lemma Lim_at_infinity:
   "(f \<longlongrightarrow> l) at_infinity \<longleftrightarrow> (\<forall>e>0. \<exists>b. \<forall>x. norm x \<ge> b \<longrightarrow> dist (f x) l < e)"
   by (auto simp add: tendsto_iff eventually_at_infinity)
+
+corollary Lim_at_infinityI [intro?]:
+  assumes "\<And>e. e > 0 \<Longrightarrow> \<exists>B. \<forall>x. norm x \<ge> B \<longrightarrow> dist (f x) l \<le> e"
+  shows "(f \<longlongrightarrow> l) at_infinity"
+apply (simp add: Lim_at_infinity, clarify)
+apply (rule ex_forward [OF assms [OF half_gt_zero]], auto)
+done
 
 lemma Lim_eventually: "eventually (\<lambda>x. f x = l) net \<Longrightarrow> (f \<longlongrightarrow> l) net"
   by (rule topological_tendstoI, auto elim: eventually_mono)
@@ -4443,60 +4466,74 @@ proof
     using Bseq_monoseq_convergent[of "f \<circ> r"] by (auto simp: convergent_def)
 qed
 
-lemma compact_lemma:
-  fixes f :: "nat \<Rightarrow> 'a::euclidean_space"
-  assumes "bounded (range f)"
-  shows "\<forall>d\<subseteq>Basis. \<exists>l::'a. \<exists> r.
-    subseq r \<and> (\<forall>e>0. eventually (\<lambda>n. \<forall>i\<in>d. dist (f (r n) \<bullet> i) (l \<bullet> i) < e) sequentially)"
+lemma compact_lemma_general:
+  fixes f :: "nat \<Rightarrow> 'a"
+  fixes proj::"'a \<Rightarrow> 'b \<Rightarrow> 'c::heine_borel" (infixl "proj" 60)
+  fixes unproj:: "('b \<Rightarrow> 'c) \<Rightarrow> 'a"
+  assumes finite_basis: "finite basis"
+  assumes bounded_proj: "\<And>k. k \<in> basis \<Longrightarrow> bounded ((\<lambda>x. x proj k) ` range f)"
+  assumes proj_unproj: "\<And>e k. k \<in> basis \<Longrightarrow> (unproj e) proj k = e k"
+  assumes unproj_proj: "\<And>x. unproj (\<lambda>k. x proj k) = x"
+  shows "\<forall>d\<subseteq>basis. \<exists>l::'a. \<exists> r.
+    subseq r \<and> (\<forall>e>0. eventually (\<lambda>n. \<forall>i\<in>d. dist (f (r n) proj i) (l proj i) < e) sequentially)"
 proof safe
-  fix d :: "'a set"
-  assume d: "d \<subseteq> Basis"
-  with finite_Basis have "finite d"
+  fix d :: "'b set"
+  assume d: "d \<subseteq> basis"
+  with finite_basis have "finite d"
     by (blast intro: finite_subset)
   from this d show "\<exists>l::'a. \<exists>r. subseq r \<and>
-    (\<forall>e>0. eventually (\<lambda>n. \<forall>i\<in>d. dist (f (r n) \<bullet> i) (l \<bullet> i) < e) sequentially)"
+    (\<forall>e>0. eventually (\<lambda>n. \<forall>i\<in>d. dist (f (r n) proj i) (l proj i) < e) sequentially)"
   proof (induct d)
     case empty
     then show ?case
       unfolding subseq_def by auto
   next
     case (insert k d)
-    have k[intro]: "k \<in> Basis"
+    have k[intro]: "k \<in> basis"
       using insert by auto
-    have s': "bounded ((\<lambda>x. x \<bullet> k) ` range f)"
-      using \<open>bounded (range f)\<close>
-      by (auto intro!: bounded_linear_image bounded_linear_inner_left)
+    have s': "bounded ((\<lambda>x. x proj k) ` range f)"
+      using k
+      by (rule bounded_proj)
     obtain l1::"'a" and r1 where r1: "subseq r1"
-      and lr1: "\<forall>e > 0. eventually (\<lambda>n. \<forall>i\<in>d. dist (f (r1 n) \<bullet> i) (l1 \<bullet> i) < e) sequentially"
+      and lr1: "\<forall>e > 0. eventually (\<lambda>n. \<forall>i\<in>d. dist (f (r1 n) proj i) (l1 proj i) < e) sequentially"
       using insert(3) using insert(4) by auto
-    have f': "\<forall>n. f (r1 n) \<bullet> k \<in> (\<lambda>x. x \<bullet> k) ` range f"
+    have f': "\<forall>n. f (r1 n) proj k \<in> (\<lambda>x. x proj k) ` range f"
       by simp
-    have "bounded (range (\<lambda>i. f (r1 i) \<bullet> k))"
+    have "bounded (range (\<lambda>i. f (r1 i) proj k))"
       by (metis (lifting) bounded_subset f' image_subsetI s')
-    then obtain l2 r2 where r2:"subseq r2" and lr2:"((\<lambda>i. f (r1 (r2 i)) \<bullet> k) \<longlongrightarrow> l2) sequentially"
-      using bounded_imp_convergent_subsequence[of "\<lambda>i. f (r1 i) \<bullet> k"]
+    then obtain l2 r2 where r2:"subseq r2" and lr2:"((\<lambda>i. f (r1 (r2 i)) proj k) \<longlongrightarrow> l2) sequentially"
+      using bounded_imp_convergent_subsequence[of "\<lambda>i. f (r1 i) proj k"]
       by (auto simp: o_def)
     def r \<equiv> "r1 \<circ> r2"
     have r:"subseq r"
       using r1 and r2 unfolding r_def o_def subseq_def by auto
     moreover
-    def l \<equiv> "(\<Sum>i\<in>Basis. (if i = k then l2 else l1\<bullet>i) *\<^sub>R i)::'a"
+    def l \<equiv> "unproj (\<lambda>i. if i = k then l2 else l1 proj i)::'a"
     {
       fix e::real
       assume "e > 0"
-      from lr1 \<open>e > 0\<close> have N1: "eventually (\<lambda>n. \<forall>i\<in>d. dist (f (r1 n) \<bullet> i) (l1 \<bullet> i) < e) sequentially"
+      from lr1 \<open>e > 0\<close> have N1: "eventually (\<lambda>n. \<forall>i\<in>d. dist (f (r1 n) proj i) (l1 proj i) < e) sequentially"
         by blast
-      from lr2 \<open>e > 0\<close> have N2:"eventually (\<lambda>n. dist (f (r1 (r2 n)) \<bullet> k) l2 < e) sequentially"
+      from lr2 \<open>e > 0\<close> have N2:"eventually (\<lambda>n. dist (f (r1 (r2 n)) proj k) l2 < e) sequentially"
         by (rule tendstoD)
-      from r2 N1 have N1': "eventually (\<lambda>n. \<forall>i\<in>d. dist (f (r1 (r2 n)) \<bullet> i) (l1 \<bullet> i) < e) sequentially"
+      from r2 N1 have N1': "eventually (\<lambda>n. \<forall>i\<in>d. dist (f (r1 (r2 n)) proj i) (l1 proj i) < e) sequentially"
         by (rule eventually_subseq)
-      have "eventually (\<lambda>n. \<forall>i\<in>(insert k d). dist (f (r n) \<bullet> i) (l \<bullet> i) < e) sequentially"
+      have "eventually (\<lambda>n. \<forall>i\<in>(insert k d). dist (f (r n) proj i) (l proj i) < e) sequentially"
         using N1' N2
-        by eventually_elim (insert insert.prems, auto simp: l_def r_def o_def)
+        by eventually_elim (insert insert.prems, auto simp: l_def r_def o_def proj_unproj)
     }
     ultimately show ?case by auto
   qed
 qed
+
+lemma compact_lemma:
+  fixes f :: "nat \<Rightarrow> 'a::euclidean_space"
+  assumes "bounded (range f)"
+  shows "\<forall>d\<subseteq>Basis. \<exists>l::'a. \<exists> r.
+    subseq r \<and> (\<forall>e>0. eventually (\<lambda>n. \<forall>i\<in>d. dist (f (r n) \<bullet> i) (l \<bullet> i) < e) sequentially)"
+  by (rule compact_lemma_general[where unproj="\<lambda>e. \<Sum>i\<in>Basis. e i *\<^sub>R i"])
+     (auto intro!: assms bounded_linear_inner_left bounded_linear_image
+       simp: euclidean_representation)
 
 instance euclidean_space \<subseteq> heine_borel
 proof
@@ -4897,6 +4934,33 @@ lemma frontier_subset_compact:
   using frontier_subset_closed compact_eq_bounded_closed
   by blast
 
+subsection\<open>Relations among convergence and absolute convergence for power series.\<close>
+
+lemma summable_imp_bounded:
+  fixes f :: "nat \<Rightarrow> 'a::real_normed_vector"
+  shows "summable f \<Longrightarrow> bounded (range f)"
+by (frule summable_LIMSEQ_zero) (simp add: convergent_imp_bounded)
+
+lemma summable_imp_sums_bounded:
+   "summable f \<Longrightarrow> bounded (range (\<lambda>n. setsum f {..<n}))"
+by (auto simp: summable_def sums_def dest: convergent_imp_bounded)
+
+lemma power_series_conv_imp_absconv_weak:
+  fixes a:: "nat \<Rightarrow> 'a::{real_normed_div_algebra,banach}" and w :: 'a
+  assumes sum: "summable (\<lambda>n. a n * z ^ n)" and no: "norm w < norm z"
+    shows "summable (\<lambda>n. of_real(norm(a n)) * w ^ n)"
+proof -
+  obtain M where M: "\<And>x. norm (a x * z ^ x) \<le> M"
+    using summable_imp_bounded [OF sum] by (force simp add: bounded_iff)
+  then have *: "summable (\<lambda>n. norm (a n) * norm w ^ n)"
+    by (rule_tac M=M in Abel_lemma) (auto simp: norm_mult norm_power intro: no)
+  show ?thesis
+    apply (rule series_comparison_complex [of "(\<lambda>n. of_real(norm(a n) * norm w ^ n))"])
+    apply (simp only: summable_complex_of_real *)
+    apply (auto simp: norm_mult norm_power)
+    done
+qed
+
 subsection \<open>Bounded closed nest property (proof does not use Heine-Borel)\<close>
 
 lemma bounded_closed_nest:
@@ -5119,7 +5183,7 @@ lemma continuous_within_eps_delta:
   apply blast
   done
 
-lemma continuous_at_eps_delta:
+corollary continuous_at_eps_delta:
   "continuous (at x) f \<longleftrightarrow> (\<forall>e > 0. \<exists>d > 0. \<forall>x'. dist x' x < d \<longrightarrow> dist (f x') (f x) < e)"
   using continuous_within_eps_delta [of x UNIV f] by simp
 
@@ -5225,6 +5289,21 @@ lemma continuous_on_iff:
     (\<forall>x\<in>s. \<forall>e>0. \<exists>d>0. \<forall>x'\<in>s. dist x' x < d \<longrightarrow> dist (f x') (f x) < e)"
   unfolding continuous_on_def Lim_within
   by (metis dist_pos_lt dist_self)
+
+lemma continuous_within_E:
+  assumes "continuous (at x within s) f" "e>0"
+  obtains d where "d>0"  "\<And>x'. \<lbrakk>x'\<in> s; dist x' x \<le> d\<rbrakk> \<Longrightarrow> dist (f x') (f x) < e"
+  using assms apply (simp add: continuous_within_eps_delta)
+  apply (drule spec [of _ e], clarify)
+  apply (rule_tac d="d/2" in that, auto)
+  done
+
+lemma continuous_onI [intro?]:
+  assumes "\<And>x e. \<lbrakk>e > 0; x \<in> s\<rbrakk> \<Longrightarrow> \<exists>d>0. \<forall>x'\<in>s. dist x' x < d \<longrightarrow> dist (f x') (f x) \<le> e"
+  shows "continuous_on s f"
+apply (simp add: continuous_on_iff, clarify)
+apply (rule ex_forward [OF assms [OF half_gt_zero]], auto)
+done
 
 lemma uniformly_continuous_on_def:
   fixes f :: "'a::metric_space \<Rightarrow> 'b::metric_space"

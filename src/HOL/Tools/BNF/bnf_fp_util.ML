@@ -156,6 +156,7 @@ sig
   val mk_tuple_balanced: term list -> term
   val mk_tuple1_balanced: typ list -> term list -> term
   val abs_curried_balanced: typ list -> term -> term
+  val mk_tupled_fun: term -> term -> term list -> term
 
   val mk_case_sum: term * term -> term
   val mk_case_sumN: term list -> term
@@ -281,22 +282,22 @@ val algN = "alg"
 val IITN = "IITN"
 val foldN = "fold"
 val unfoldN = unN ^ foldN
-val uniqueN = "_unique"
-val transferN = "_transfer"
+val uniqueN = "unique"
+val transferN = "transfer"
 val simpsN = "simps"
 val ctorN = "ctor"
 val dtorN = "dtor"
 val ctor_foldN = ctorN ^ "_" ^ foldN
 val dtor_unfoldN = dtorN ^ "_" ^ unfoldN
-val ctor_fold_uniqueN = ctor_foldN ^ uniqueN
+val ctor_fold_uniqueN = ctor_foldN ^ "_" ^ uniqueN
 val ctor_fold_o_mapN = ctor_foldN ^ "_o_" ^ mapN
-val dtor_unfold_uniqueN = dtor_unfoldN ^ uniqueN
+val dtor_unfold_uniqueN = dtor_unfoldN ^ "_" ^ uniqueN
 val dtor_unfold_o_mapN = dtor_unfoldN ^ "_o_" ^ mapN
-val ctor_fold_transferN = ctor_foldN ^ transferN
-val dtor_unfold_transferN = dtor_unfoldN ^ transferN
+val ctor_fold_transferN = ctor_foldN ^ "_" ^ transferN
+val dtor_unfold_transferN = dtor_unfoldN ^ "_" ^ transferN
 val ctor_mapN = ctorN ^ "_" ^ mapN
 val dtor_mapN = dtorN ^ "_" ^ mapN
-val map_uniqueN = mapN ^ uniqueN
+val map_uniqueN = mapN ^ "_" ^ uniqueN
 val ctor_map_uniqueN = ctorN ^ "_" ^ map_uniqueN
 val dtor_map_uniqueN = dtorN ^ "_" ^ map_uniqueN
 val min_algN = "min_alg"
@@ -322,12 +323,12 @@ val recN = "rec"
 val corecN = coN ^ recN
 val ctor_recN = ctorN ^ "_" ^ recN
 val ctor_rec_o_mapN = ctor_recN ^ "_o_" ^ mapN
-val ctor_rec_transferN = ctor_recN ^ transferN
-val ctor_rec_uniqueN = ctor_recN ^ uniqueN
+val ctor_rec_transferN = ctor_recN ^ "_" ^ transferN
+val ctor_rec_uniqueN = ctor_recN ^ "_" ^ uniqueN
 val dtor_corecN = dtorN ^ "_" ^ corecN
 val dtor_corec_o_mapN = dtor_corecN ^ "_o_" ^ mapN
-val dtor_corec_transferN = dtor_corecN ^ transferN
-val dtor_corec_uniqueN = dtor_corecN ^ uniqueN
+val dtor_corec_transferN = dtor_corecN ^ "_" ^ transferN
+val dtor_corec_uniqueN = dtor_corecN ^ "_" ^ uniqueN
 
 val ctor_dtorN = ctorN ^ "_" ^ dtorN
 val dtor_ctorN = dtorN ^ "_" ^ ctorN
@@ -461,8 +462,8 @@ fun mk_tupled_fun f x xs =
   if xs = [x] then f else HOLogic.tupled_lambda x (Term.list_comb (f, xs));
 
 fun mk_case_absumprod absT rep fs xss xss' =
-  HOLogic.mk_comp (mk_case_sumN_balanced (@{map 3} mk_tupled_fun fs (map mk_tuple_balanced xss) xss'),
-    mk_rep absT rep);
+  HOLogic.mk_comp (mk_case_sumN_balanced
+    (@{map 3} mk_tupled_fun fs (map mk_tuple_balanced xss) xss'), mk_rep absT rep);
 
 fun If_const T = Const (@{const_name If}, HOLogic.boolT --> T --> T --> T);
 fun mk_If p t f = let val T = fastype_of t in If_const T $ p $ t $ f end;
