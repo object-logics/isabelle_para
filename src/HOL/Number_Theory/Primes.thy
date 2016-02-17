@@ -64,7 +64,7 @@ lemma prime_ge_2_nat: "prime p \<Longrightarrow> p >= 2"
 
 lemma prime_imp_coprime_nat: "prime p \<Longrightarrow> \<not> p dvd n \<Longrightarrow> coprime p n"
   apply (unfold prime_def)
-  apply (metis gcd_dvd1_nat gcd_dvd2_nat)
+  apply (metis gcd_dvd1 gcd_dvd2)
   done
 
 lemma prime_int_altdef:
@@ -72,22 +72,22 @@ lemma prime_int_altdef:
     m = 1 \<or> m = p))"
   apply (simp add: prime_def)
   apply (auto simp add: )
-  apply (metis One_nat_def int_1 nat_0_le nat_dvd_iff)
+  apply (metis One_nat_def of_nat_1 nat_0_le nat_dvd_iff)
   apply (metis zdvd_int One_nat_def le0 of_nat_0 of_nat_1 of_nat_eq_iff of_nat_le_iff)
   done
 
 lemma prime_imp_coprime_int:
   fixes n::int shows "prime p \<Longrightarrow> \<not> p dvd n \<Longrightarrow> coprime p n"
   apply (unfold prime_int_altdef)
-  apply (metis gcd_dvd1_int gcd_dvd2_int gcd_ge_0_int)
+  apply (metis gcd_dvd1 gcd_dvd2 gcd_ge_0_int)
   done
 
 lemma prime_dvd_mult_nat: "prime p \<Longrightarrow> p dvd m * n \<Longrightarrow> p dvd m \<or> p dvd n"
-  by (blast intro: coprime_dvd_mult_nat prime_imp_coprime_nat)
+  by (blast intro: coprime_dvd_mult prime_imp_coprime_nat)
 
 lemma prime_dvd_mult_int:
   fixes n::int shows "prime p \<Longrightarrow> p dvd m * n \<Longrightarrow> p dvd m \<or> p dvd n"
-  by (blast intro: coprime_dvd_mult_int prime_imp_coprime_int)
+  by (blast intro: coprime_dvd_mult prime_imp_coprime_int)
 
 lemma prime_dvd_mult_eq_nat [simp]: "prime p \<Longrightarrow>
     p dvd m * n = (p dvd m \<or> p dvd n)"
@@ -167,14 +167,19 @@ lemma primes_imp_powers_coprime_nat:
     "prime p \<Longrightarrow> prime q \<Longrightarrow> p ~= q \<Longrightarrow> coprime (p^m) (q^n)"
   by (rule coprime_exp2_nat, rule primes_coprime_nat)
 
-lemma prime_factor_nat: "n \<noteq> (1::nat) \<Longrightarrow> \<exists> p. prime p \<and> p dvd n"
-  apply (induct n rule: nat_less_induct)
-  apply (case_tac "n = 0")
-  using two_is_prime_nat
-  apply blast
-  apply (metis One_nat_def dvd.order_trans dvd_refl less_Suc0 linorder_neqE_nat
-    nat_dvd_not_less neq0_conv prime_def)
-  done
+lemma prime_factor_nat:
+  "n \<noteq> (1::nat) \<Longrightarrow> \<exists>p. prime p \<and> p dvd n"
+proof (induct n rule: nat_less_induct)
+  case (1 n) show ?case
+  proof (cases "n = 0")
+    case True then show ?thesis
+    by (auto intro: two_is_prime_nat)
+  next
+    case False with "1.prems" have "n > 1" by simp
+    with "1.hyps" show ?thesis
+    by (metis One_nat_def dvd_mult dvd_refl not_prime_eq_prod_nat order_less_irrefl)
+  qed
+qed
 
 text \<open>One property of coprimality is easier to prove via prime factors.\<close>
 
@@ -198,20 +203,20 @@ proof-
     { assume pa: "p dvd a"
       from coprime_common_divisor_nat [OF ab, OF pa] p have "\<not> p dvd b" by auto
       with p have "coprime b p"
-        by (subst gcd_commute_nat, intro prime_imp_coprime_nat)
+        by (subst gcd.commute, intro prime_imp_coprime_nat)
       then have pnb: "coprime (p^n) b"
-        by (subst gcd_commute_nat, rule coprime_exp_nat)
-      from coprime_dvd_mult_nat[OF pnb pab] have ?thesis by blast }
+        by (subst gcd.commute, rule coprime_exp_nat)
+      from coprime_dvd_mult[OF pnb pab] have ?thesis by blast }
     moreover
     { assume pb: "p dvd b"
       have pnba: "p^n dvd b*a" using pab by (simp add: mult.commute)
       from coprime_common_divisor_nat [OF ab, of p] pb p have "\<not> p dvd a"
         by auto
       with p have "coprime a p"
-        by (subst gcd_commute_nat, intro prime_imp_coprime_nat)
+        by (subst gcd.commute, intro prime_imp_coprime_nat)
       then have pna: "coprime (p^n) a"
-        by (subst gcd_commute_nat, rule coprime_exp_nat)
-      from coprime_dvd_mult_nat[OF pna pnba] have ?thesis by blast }
+        by (subst gcd.commute, rule coprime_exp_nat)
+      from coprime_dvd_mult[OF pna pnba] have ?thesis by blast }
     ultimately have ?thesis by blast }
   ultimately show ?thesis by blast
 qed
@@ -417,11 +422,13 @@ by (metis assms bezout_nat gcd_nat.left_neutral)
 lemma bezout_prime:
   assumes p: "prime p" and pa: "\<not> p dvd a"
   shows "\<exists>x y. a*x = Suc (p*y)"
-proof-
+proof -
   have ap: "coprime a p"
     by (metis gcd.commute p pa prime_imp_coprime_nat)
-  from coprime_bezout_strong[OF ap] show ?thesis
-    by (metis Suc_eq_plus1 gcd_lcm_complete_lattice_nat.bot.extremum pa)
+  moreover from p have "p \<noteq> 1" by auto
+  ultimately have "\<exists>x y. a * x = p * y + 1"
+    by (rule coprime_bezout_strong)
+  then show ?thesis by simp    
 qed
 
 end

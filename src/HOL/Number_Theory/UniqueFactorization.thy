@@ -98,14 +98,14 @@ proof (cases "a \<in> set_mset M")
   finally have "a ^ count M a dvd a ^ count N a * (\<Prod>i \<in> (set_mset N - {a}). i ^ count N i)" .
   moreover
   have "coprime (a ^ count M a) (\<Prod>i \<in> (set_mset N - {a}). i ^ count N i)"
-    apply (subst gcd_commute_nat)
+    apply (subst gcd.commute)
     apply (rule setprod_coprime_nat)
     apply (rule primes_imp_powers_coprime_nat)
     using assms True
     apply auto
     done
   ultimately have "a ^ count M a dvd a ^ count N a"
-    by (elim coprime_dvd_mult_nat)
+    by (elim coprime_dvd_mult)
   with a show ?thesis
     using power_dvd_imp_le prime_def by blast
 next
@@ -653,15 +653,16 @@ lemma multiplicity_dvd_int:
 
 lemma multiplicity_dvd'_nat:
   fixes x y :: nat
-  shows "0 < x \<Longrightarrow> \<forall>p. prime p \<longrightarrow> multiplicity p x \<le> multiplicity p y \<Longrightarrow> x dvd y"
-  by (metis gcd_lcm_complete_lattice_nat.top_greatest le_refl multiplicity_dvd_nat
-      multiplicity_nonprime_nat neq0_conv)
+  assumes "0 < x"
+  assumes "\<forall>p. prime p \<longrightarrow> multiplicity p x \<le> multiplicity p y"
+  shows "x dvd y"
+  using dvd_0_right assms by (metis (no_types) le0 multiplicity_dvd_nat multiplicity_nonprime_nat not_gr0)
 
 lemma multiplicity_dvd'_int:
   fixes x y :: int
   shows "0 < x \<Longrightarrow> 0 \<le> y \<Longrightarrow>
     \<forall>p. prime p \<longrightarrow> multiplicity p x \<le> multiplicity p y \<Longrightarrow> x dvd y"
-  by (metis GCD.dvd_int_iff abs_int_eq multiplicity_dvd'_nat multiplicity_int_def nat_int
+  by (metis dvd_int_iff abs_of_nat multiplicity_dvd'_nat multiplicity_int_def nat_int
     zero_le_imp_eq_int zero_less_imp_eq_int)
 
 lemma dvd_multiplicity_eq_nat:

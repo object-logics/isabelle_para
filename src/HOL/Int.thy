@@ -190,6 +190,21 @@ apply (rule_tac x="c+b - Suc(a+d)" in exI)
 apply arith
 done
 
+lemma zabs_less_one_iff [simp]:
+  fixes z :: int
+  shows "\<bar>z\<bar> < 1 \<longleftrightarrow> z = 0" (is "?P \<longleftrightarrow> ?Q")
+proof
+  assume ?Q then show ?P by simp
+next
+  assume ?P
+  with zless_imp_add1_zle [of "\<bar>z\<bar>" 1] have "\<bar>z\<bar> + 1 \<le> 1"
+    by simp
+  then have "\<bar>z\<bar> \<le> 0"
+    by simp
+  then show ?Q
+    by simp
+qed
+
 lemmas int_distrib =
   distrib_right [of z1 z2 w]
   distrib_left [of w z1 z2]
@@ -319,6 +334,45 @@ lemma of_int_pos: "z > 0 \<Longrightarrow> of_int z > 0"
 
 lemma of_int_nonneg: "z \<ge> 0 \<Longrightarrow> of_int z \<ge> 0"
   by simp
+
+lemma of_int_abs [simp]:
+  "of_int \<bar>x\<bar> = \<bar>of_int x\<bar>"
+  by (auto simp add: abs_if)
+
+lemma of_int_lessD:
+  assumes "\<bar>of_int n\<bar> < x"
+  shows "n = 0 \<or> x > 1"
+proof (cases "n = 0")
+  case True then show ?thesis by simp
+next
+  case False
+  then have "\<bar>n\<bar> \<noteq> 0" by simp
+  then have "\<bar>n\<bar> > 0" by simp
+  then have "\<bar>n\<bar> \<ge> 1"
+    using zless_imp_add1_zle [of 0 "\<bar>n\<bar>"] by simp
+  then have "\<bar>of_int n\<bar> \<ge> 1"
+    unfolding of_int_1_le_iff [of "\<bar>n\<bar>", symmetric] by simp
+  then have "1 < x" using assms by (rule le_less_trans)
+  then show ?thesis ..
+qed
+
+lemma of_int_leD:
+  assumes "\<bar>of_int n\<bar> \<le> x"
+  shows "n = 0 \<or> 1 \<le> x"
+proof (cases "n = 0")
+  case True then show ?thesis by simp
+next
+  case False
+  then have "\<bar>n\<bar> \<noteq> 0" by simp
+  then have "\<bar>n\<bar> > 0" by simp
+  then have "\<bar>n\<bar> \<ge> 1"
+    using zless_imp_add1_zle [of 0 "\<bar>n\<bar>"] by simp
+  then have "\<bar>of_int n\<bar> \<ge> 1"
+    unfolding of_int_1_le_iff [of "\<bar>n\<bar>", symmetric] by simp
+  then have "1 \<le> x" using assms by (rule order_trans)
+  then show ?thesis ..
+qed
+
 
 end
 
@@ -516,15 +570,19 @@ by (simp add: linorder_not_less)
 lemma negative_eq_positive [simp]: "(- int n = of_nat m) = (n = 0 & m = 0)"
 by (force simp add: order_eq_iff [of "- of_nat n"] int_zle_neg)
 
-lemma zle_iff_zadd: "w \<le> z \<longleftrightarrow> (\<exists>n. z = w + int n)"
-proof -
-  have "(w \<le> z) = (0 \<le> z - w)"
-    by (simp only: le_diff_eq add_0_left)
-  also have "\<dots> = (\<exists>n. z - w = of_nat n)"
-    by (auto elim: zero_le_imp_eq_int)
-  also have "\<dots> = (\<exists>n. z = w + of_nat n)"
-    by (simp only: algebra_simps)
-  finally show ?thesis .
+lemma zle_iff_zadd:
+  "w \<le> z \<longleftrightarrow> (\<exists>n. z = w + int n)" (is "?P \<longleftrightarrow> ?Q")
+proof
+  assume ?Q
+  then show ?P by auto
+next
+  assume ?P
+  then have "0 \<le> z - w" by simp
+  then obtain n where "z - w = int n"
+    using zero_le_imp_eq_int [of "z - w"] by blast
+  then have "z = w + int n"
+    by simp
+  then show ?Q ..
 qed
 
 lemma zadd_int_left: "int m + (int n + z) = int (m + n) + z"
@@ -1152,9 +1210,6 @@ done
 
 subsection\<open>Products and 1, by T. M. Rasmussen\<close>
 
-lemma zabs_less_one_iff [simp]: "(\<bar>z\<bar> < 1) = (z = (0::int))"
-by arith
-
 lemma abs_zmult_eq_1:
   assumes mn: "\<bar>m * n\<bar> = 1"
   shows "\<bar>m\<bar> = (1::int)"
@@ -1674,34 +1729,9 @@ quickcheck_params [default_type = int]
 hide_const (open) Pos Neg sub dup
 
 
-subsection \<open>Legacy theorems\<close>
-
-lemmas inj_int = inj_of_nat [where 'a=int]
-lemmas zadd_int = of_nat_add [where 'a=int, symmetric]
-lemmas int_mult = of_nat_mult [where 'a=int]
-lemmas int_eq_0_conv = of_nat_eq_0_iff [where 'a=int and m="n"] for n
-lemmas zless_int = of_nat_less_iff [where 'a=int]
-lemmas int_less_0_conv = of_nat_less_0_iff [where 'a=int and m="k"] for k
-lemmas zero_less_int_conv = of_nat_0_less_iff [where 'a=int]
-lemmas zero_zle_int = of_nat_0_le_iff [where 'a=int]
-lemmas int_le_0_conv = of_nat_le_0_iff [where 'a=int and m="n"] for n
-lemmas int_0 = of_nat_0 [where 'a=int]
-lemmas int_1 = of_nat_1 [where 'a=int]
-lemmas int_Suc = of_nat_Suc [where 'a=int]
-lemmas int_numeral = of_nat_numeral [where 'a=int]
-lemmas abs_int_eq = abs_of_nat [where 'a=int and n="m"] for m
-lemmas of_int_int_eq = of_int_of_nat_eq [where 'a=int]
-lemmas zdiff_int = of_nat_diff [where 'a=int, symmetric]
-lemmas zpower_numeral_even = power_numeral_even [where 'a=int]
-lemmas zpower_numeral_odd = power_numeral_odd [where 'a=int]
-
 text \<open>De-register \<open>int\<close> as a quotient type:\<close>
 
 lifting_update int.lifting
 lifting_forget int.lifting
-
-text\<open>Also the class for fields with characteristic zero.\<close>
-class field_char_0 = field + ring_char_0
-subclass (in linordered_field) field_char_0 ..
 
 end

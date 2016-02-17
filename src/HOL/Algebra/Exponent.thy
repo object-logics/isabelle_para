@@ -21,10 +21,10 @@ definition
 text\<open>Prime Theorems\<close>
 
 lemma prime_iff:
-  "(prime p) = (Suc 0 < p & (\<forall>a b. p dvd a*b --> (p dvd a) | (p dvd b)))"
-apply (auto simp add: prime_gt_Suc_0_nat)
-by (metis (full_types) One_nat_def Suc_lessD dvd.order_refl nat_dvd_not_less not_prime_eq_prod_nat)
-
+  "prime p \<longleftrightarrow> Suc 0 < p \<and> (\<forall>a b. p dvd a * b \<longrightarrow> p dvd a \<or> p dvd b)"
+  by (auto simp add: prime_gt_Suc_0_nat)
+    (metis One_nat_def Suc_lessD dvd_refl nat_dvd_not_less not_prime_eq_prod_nat)
+  
 lemma zero_less_prime_power:
   fixes p::nat shows "prime p ==> 0 < p^a"
 by (force simp add: prime_iff)
@@ -201,7 +201,7 @@ apply (drule contrapos_nn [OF _ leI, THEN notnotD], assumption)
 apply (drule less_imp_le [of a])
 apply (drule le_imp_power_dvd)
 apply (drule_tac b = "p ^ r" in dvd_trans, assumption)
-apply (metis diff_is_0_eq dvd_diffD1 gcd_dvd2_nat gcd_mult' gr0I le_extend_mult less_diff_conv nat_dvd_not_less mult.commute not_add_less2 xt1(10))
+apply (metis diff_is_0_eq dvd_diffD1 gcd_dvd2 gcd_mult' gr0I le_extend_mult less_diff_conv nat_dvd_not_less mult.commute not_add_less2 xt1(10))
 done
 
 lemma p_fac_forw: "[| (m::nat) > 0; k>0; k < p^a; (p^r) dvd (p^a)* m - k |]

@@ -25,9 +25,19 @@ lemma fact_1 [simp]: "fact 1 = 1"
 lemma fact_Suc_0 [simp]: "fact (Suc 0) = Suc 0"
   by simp
 
-lemma of_nat_fact [simp]: "of_nat (fact n) = fact n"
+lemma of_nat_fact [simp]:
+  "of_nat (fact n) = fact n"
   by (induct n) (auto simp add: algebra_simps of_nat_mult)
  
+lemma of_int_fact [simp]:
+  "of_int (fact n) = fact n"
+proof -
+  have "of_int (of_nat (fact n)) = fact n"
+    unfolding of_int_of_nat_eq by simp
+  then show ?thesis
+    by simp
+qed
+
 lemma fact_reduce: "n > 0 \<Longrightarrow> fact n = of_nat n * fact (n - 1)"
   by (cases n) auto
 
@@ -1323,7 +1333,7 @@ proof -
   also have "... = (fact (m+r+k) * fact (m+r)) div (fact r * (fact k * fact m) * fact (m+r))"
     apply (subst div_mult_div_if_dvd [symmetric])
     apply (auto simp add: algebra_simps)
-    apply (metis fact_fact_dvd_fact dvd.order.trans nat_mult_dvd_cancel_disj)
+    apply (metis fact_fact_dvd_fact dvd_trans nat_mult_dvd_cancel_disj)
     done
   also have "... = (fact (m+r+k) div (fact k * fact (m+r)) * (fact (m+r) div (fact r * fact m)))"
     apply (subst div_mult_div_if_dvd)

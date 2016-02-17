@@ -145,7 +145,7 @@ proof
   show "a = a * 1" by simp
 qed
 
-lemma dvd_trans:
+lemma dvd_trans [trans]:
   assumes "a dvd b" and "b dvd c"
   shows "a dvd c"
 proof -
@@ -1562,6 +1562,14 @@ lemma not_square_less_zero [simp]: "\<not> (a * a < 0)"
 proposition abs_eq_iff: "\<bar>x\<bar> = \<bar>y\<bar> \<longleftrightarrow> x = y \<or> x = -y"
   by (auto simp add: abs_if split: split_if_asm)
 
+lemma sum_squares_ge_zero:
+  "0 \<le> x * x + y * y"
+  by (intro add_nonneg_nonneg zero_le_square)
+
+lemma not_sum_squares_lt_zero:
+  "\<not> x * x + y * y < 0"
+  by (simp add: not_less sum_squares_ge_zero)
+
 end
 
 class linordered_ring_strict = ring + linordered_semiring_strict
@@ -1866,6 +1874,10 @@ lemma sgn_greater [simp]:
 lemma sgn_less [simp]:
   "sgn a < 0 \<longleftrightarrow> a < 0"
   unfolding sgn_if by auto
+
+lemma abs_sgn_eq:
+  "\<bar>sgn a\<bar> = (if a = 0 then 0 else 1)"
+  by (simp add: sgn_if)
 
 lemma abs_dvd_iff [simp]: "\<bar>m\<bar> dvd k \<longleftrightarrow> m dvd k"
   by (simp add: abs_if)
