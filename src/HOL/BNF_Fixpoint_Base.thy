@@ -73,12 +73,12 @@ lemma case_sum_if:
   "case_sum f g (if p then Inl x else Inr y) = (if p then f x else g y)"
   by simp
 
-lemma prod_set_simps:
+lemma prod_set_simps[simp]:
   "fsts (x, y) = {x}"
   "snds (x, y) = {y}"
   unfolding prod_set_defs by simp+
 
-lemma sum_set_simps:
+lemma sum_set_simps[simp]:
   "setl (Inl x) = {x}"
   "setl (Inr x) = {}"
   "setr (Inl x) = {}"
@@ -235,6 +235,12 @@ lemma Inr_transfer:
 
 lemma Pair_transfer: "rel_fun A (rel_fun B (rel_prod A B)) Pair Pair"
   unfolding rel_fun_def by simp
+
+lemma eq_onp_live_step: "x = y \<Longrightarrow> eq_onp P a a \<and> x \<longleftrightarrow> P a \<and> y"
+  by (simp only: eq_onp_same_args)
+
+lemma top_conj: "top x \<and> P \<longleftrightarrow> P" "P \<and> top x \<longleftrightarrow> P"
+  by blast+
 
 ML_file "Tools/BNF/bnf_fp_util.ML"
 ML_file "Tools/BNF/bnf_fp_def_sugar_tactics.ML"

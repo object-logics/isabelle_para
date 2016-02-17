@@ -10,6 +10,7 @@ sig
   val unfold_lets_splits: term -> term
   val unfold_splits_lets: term -> term
   val dest_map: Proof.context -> string -> term -> term * term list
+  val dest_pred: Proof.context -> string -> term -> term * term list
 
   val mutualize_fp_sugars: (string -> bool) -> BNF_Util.fp_kind -> int list -> binding list ->
     typ list -> term list -> term list list list list -> BNF_FP_Def_Sugar.fp_sugar list ->
@@ -78,27 +79,29 @@ and unfold_splits_lets ((t as Const (@{const_name case_prod}, _)) $ u) =
   | unfold_splits_lets (Abs (s, T, t)) = Abs (s, T, unfold_splits_lets t)
   | unfold_splits_lets t = unfold_lets_splits t;
 
-fun mk_map_pattern ctxt s =
+fun dest_either_map_or_pred map_or_pred_of_bnf ctxt T_name call =
   let
-    val bnf = the (bnf_of ctxt s);
-    val mapx = map_of_bnf bnf;
+    val bnf = the (bnf_of ctxt T_name);
+    val const0 = map_or_pred_of_bnf bnf;
     val live = live_of_bnf bnf;
-    val (f_Ts, _) = strip_typeN live (fastype_of mapx);
-    val fs = map_index (fn (i, T) => Var (("?f", i), T)) f_Ts;
-  in
-    (mapx, betapplys (mapx, fs))
-  end;
-
-fun dest_map ctxt s call =
-  let
-    val (map0, pat) = mk_map_pattern ctxt s;
+    val (f_Ts, _) = strip_typeN live (fastype_of const0);
+    val fs = map_index (fn (i, T) => Var (("f", i), T)) f_Ts;
+    val pat = betapplys (const0, fs);
     val (_, tenv) = fo_match ctxt call pat;
   in
-    (map0, Vartab.fold_rev (fn (_, (_, f)) => cons f) tenv [])
+    (const0, Vartab.fold_rev (fn (_, (_, f)) => cons f) tenv [])
   end;
 
-fun dest_abs_or_applied_map _ _ (Abs (_, _, t)) = (Term.dummy, [t])
-  | dest_abs_or_applied_map ctxt s (t1 $ _) = dest_map ctxt s t1;
+val dest_map = dest_either_map_or_pred map_of_bnf;
+val dest_pred = dest_either_map_or_pred pred_of_bnf;
+
+fun dest_map_or_pred ctxt T_name call =
+  (case try (dest_map ctxt T_name) call of
+    SOME res => res
+  | NONE => dest_pred ctxt T_name call);
+
+fun dest_abs_or_applied_map_or_pred _ _ (Abs (_, _, t)) = (Term.dummy, [t])
+  | dest_abs_or_applied_map_or_pred ctxt s (t1 $ _) = dest_map_or_pred ctxt s t1;
 
 fun map_partition f xs =
   fold_rev (fn x => fn (ys, (good, bad)) =>
@@ -144,6 +147,7 @@ fun mutualize_fp_sugars plugins fp mutual_cliques bs fpTs callers callssss fp_su
         morph_ctr_sugar phi ctr_sugar
       end;
 
+    val ctor_iff_dtors = map (#ctor_iff_dtor o #fp_ctr_sugar) fp_sugars0;
     val ctr_defss = map (#ctr_defs o #fp_ctr_sugar) fp_sugars0;
     val mapss = map (#map_thms o #fp_bnf_sugar) fp_sugars0;
     val ctr_sugars = map2 target_ctr_sugar_of_fp_sugar fpTs fp_sugars0;
@@ -198,7 +202,7 @@ fun mutualize_fp_sugars plugins fp mutual_cliques bs fpTs callers callssss fp_su
     and freeze_fpTs_call kk fpT calls (T as Type (s, _)) =
         (case map_partition (try (snd o dest_map no_defs_lthy s)) calls of
           ([], _) =>
-          (case map_partition (try (snd o dest_abs_or_applied_map no_defs_lthy s)) calls of
+          (case map_partition (try (snd o dest_abs_or_applied_map_or_pred no_defs_lthy s)) calls of
             ([], _) => freeze_fpTs_mutual_call kk fpT calls T
           | callsp => freeze_fpTs_map kk fpT callsp T)
         | callsp => freeze_fpTs_map kk fpT callsp T)
@@ -291,11 +295,12 @@ fun mutualize_fp_sugars plugins fp mutual_cliques bs fpTs callers callssss fp_su
         val names_lthy = lthy |> fold Variable.declare_typ (As @ Cs @ Xs);
         val phi = Proof_Context.export_morphism names_lthy lthy;
 
-        fun mk_target_fp_sugar T X kk pre_bnf absT_info ctrXs_Tss ctr_defs ctr_sugar co_rec
-            co_rec_def map_thms co_inducts co_rec_thms co_rec_disc_thms co_rec_sel_thmss
+        fun mk_target_fp_sugar T X kk pre_bnf absT_info ctrXs_Tss ctor_iff_dtor ctr_defs ctr_sugar
+            co_rec co_rec_def map_thms co_inducts co_rec_thms co_rec_disc_thms co_rec_sel_thmss
             ({fp_ctr_sugar = {ctr_transfers, case_transfers, disc_transfers, sel_transfers, ...},
               fp_bnf_sugar = {map_disc_iffs, map_selss, rel_injects, rel_distincts, rel_sels,
-                rel_intros, rel_cases, set_thms, set_selssss, set_introssss, set_cases, ...},
+                rel_intros, rel_cases, pred_injects, set_thms, set_selssss, set_introssss,
+                set_cases, ...},
               fp_co_induct_sugar = {co_rec_disc_iffs, co_rec_codes, co_rec_transfers,
                 co_rec_o_maps, common_rel_co_inducts, rel_co_inducts, common_set_inducts,
                 set_inducts, ...},
@@ -305,6 +310,7 @@ fun mutualize_fp_sugars plugins fp mutual_cliques bs fpTs callers callssss fp_su
            fp_nesting_bnfs = fp_nesting_bnfs, live_nesting_bnfs = live_nesting_bnfs,
            fp_ctr_sugar =
              {ctrXs_Tss = ctrXs_Tss,
+              ctor_iff_dtor = ctor_iff_dtor,
               ctr_defs = ctr_defs,
               ctr_sugar = ctr_sugar,
               ctr_transfers = ctr_transfers,
@@ -320,6 +326,7 @@ fun mutualize_fp_sugars plugins fp mutual_cliques bs fpTs callers callssss fp_su
               rel_sels = rel_sels,
               rel_intros = rel_intros,
               rel_cases = rel_cases,
+              pred_injects = pred_injects,
               set_thms = set_thms,
               set_selssss = set_selssss,
               set_introssss = set_introssss,
@@ -343,8 +350,8 @@ fun mutualize_fp_sugars plugins fp mutual_cliques bs fpTs callers callssss fp_su
           |> morph_fp_sugar phi;
 
         val target_fp_sugars =
-          @{map 16} mk_target_fp_sugar fpTs Xs kks pre_bnfs absT_infos ctrXs_Tsss ctr_defss
-            ctr_sugars co_recs co_rec_defs mapss (transpose co_inductss') co_rec_thmss
+          @{map 17} mk_target_fp_sugar fpTs Xs kks pre_bnfs absT_infos ctrXs_Tsss ctor_iff_dtors
+            ctr_defss ctr_sugars co_recs co_rec_defs mapss (transpose co_inductss') co_rec_thmss
             co_rec_disc_thmss co_rec_sel_thmsss fp_sugars0;
 
         val n2m_sugar = (target_fp_sugars, fp_sugar_thms);
