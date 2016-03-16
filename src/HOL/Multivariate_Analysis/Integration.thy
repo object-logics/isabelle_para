@@ -11,78 +11,9 @@ imports
   "~~/src/HOL/Library/Indicator_Function"
 begin
 
-lemma cSup_abs_le: (* TODO: move to Conditionally_Complete_Lattices.thy? *)
-  fixes S :: "('a::{linordered_idom,conditionally_complete_linorder}) set"
-  shows "S \<noteq> {} \<Longrightarrow> (\<And>x. x\<in>S \<Longrightarrow> \<bar>x\<bar> \<le> a) \<Longrightarrow> \<bar>Sup S\<bar> \<le> a"
-  apply (auto simp add: abs_le_iff intro: cSup_least)
-  by (metis bdd_aboveI cSup_upper neg_le_iff_le order_trans)
-
-lemma cInf_abs_ge:
-  fixes S :: "('a::{linordered_idom,conditionally_complete_linorder}) set"
-  assumes "S \<noteq> {}" and bdd: "\<And>x. x\<in>S \<Longrightarrow> \<bar>x\<bar> \<le> a"
-  shows "\<bar>Inf S\<bar> \<le> a"
-proof -
-  have "Sup (uminus ` S) = - (Inf S)"
-  proof (rule antisym)
-    show "- (Inf S) \<le> Sup(uminus ` S)"
-      apply (subst minus_le_iff)
-      apply (rule cInf_greatest [OF \<open>S \<noteq> {}\<close>])
-      apply (subst minus_le_iff)
-      apply (rule cSup_upper, force)
-      using bdd apply (force simp add: abs_le_iff bdd_above_def)
-      done
-  next
-    show "Sup (uminus ` S) \<le> - Inf S"
-      apply (rule cSup_least)
-       using \<open>S \<noteq> {}\<close> apply (force simp add: )
-      apply clarsimp  
-      apply (rule cInf_lower)
-      apply assumption
-      using bdd apply (simp add: bdd_below_def)
-      apply (rule_tac x="-a" in exI)
-      apply force
-      done
-  qed
-  with cSup_abs_le [of "uminus ` S"] assms show ?thesis by fastforce
-qed
-
-lemma cSup_asclose:
-  fixes S :: "('a::{linordered_idom,conditionally_complete_linorder}) set"
-  assumes S: "S \<noteq> {}"
-    and b: "\<forall>x\<in>S. \<bar>x - l\<bar> \<le> e"
-  shows "\<bar>Sup S - l\<bar> \<le> e"
-proof -
-  have th: "\<And>(x::'a) l e. \<bar>x - l\<bar> \<le> e \<longleftrightarrow> l - e \<le> x \<and> x \<le> l + e"
-    by arith
-  have "bdd_above S"
-    using b by (auto intro!: bdd_aboveI[of _ "l + e"])
-  with S b show ?thesis
-    unfolding th by (auto intro!: cSup_upper2 cSup_least)
-qed
-
-lemma cInf_asclose:
-  fixes S :: "real set"
-  assumes S: "S \<noteq> {}"
-    and b: "\<forall>x\<in>S. \<bar>x - l\<bar> \<le> e"
-  shows "\<bar>Inf S - l\<bar> \<le> e"
-proof -
-  have "\<bar>- Sup (uminus ` S) - l\<bar> =  \<bar>Sup (uminus ` S) - (-l)\<bar>"
-    by auto
-  also have "\<dots> \<le> e"
-    apply (rule cSup_asclose)
-    using abs_minus_add_cancel b by (auto simp add: S)
-  finally have "\<bar>- Sup (uminus ` S) - l\<bar> \<le> e" .
-  then show ?thesis
-    by (simp add: Inf_real_def)
-qed
-
 lemmas scaleR_simps = scaleR_zero_left scaleR_minus_left scaleR_left_diff_distrib
   scaleR_zero_right scaleR_minus_right scaleR_right_diff_distrib scaleR_eq_0_iff
   scaleR_cancel_left scaleR_cancel_right scaleR_add_right scaleR_add_left real_vector_class.scaleR_one
-
-lemma real_arch_invD:
-  "0 < (e::real) \<Longrightarrow> (\<exists>n::nat. n \<noteq> 0 \<and> 0 < inverse (real n) \<and> inverse (real n) < e)"
-  by (subst(asm) real_arch_inv)
 
 
 subsection \<open>Sundries\<close>
@@ -1193,13 +1124,8 @@ next
   show ?thesis
   proof (cases "cbox a b \<inter> cbox c d = {}")
     case True
-    show ?thesis
-      apply (rule that[of "{cbox c d}"])
-      apply (subst insert_is_Un)
-      apply (rule division_disjoint_union)
-      using \<open>cbox c d \<noteq> {}\<close> True assms interior_subset
-      apply auto
-      done
+    then show ?thesis
+      by (metis that False assms division_disjoint_union division_of_self insert_is_Un interior_Int interior_empty)
   next
     case False
     obtain u v where uv: "cbox a b \<inter> cbox c d = cbox u v"
@@ -1220,13 +1146,14 @@ next
     finally have [simp]: "interior (cbox a b) \<inter> interior (\<Union>(p - {cbox u v})) = {}" by simp
     have cbe: "cbox a b \<union> cbox c d = cbox a b \<union> \<Union>(p - {cbox u v})"
       using p(8) unfolding uv[symmetric] by auto
-    show ?thesis
-      apply (rule that[of "p - {cbox u v}"])
-      apply (simp add: cbe)
-      apply (subst insert_is_Un)
-      apply (rule division_disjoint_union)
-      apply (simp_all add: assms division_of_self)
-      by (metis Diff_subset division_of_subset p(1) p(8))
+    have "insert (cbox a b) (p - {cbox u v}) division_of cbox a b \<union> \<Union>(p - {cbox u v})"
+    proof -
+      have "{cbox a b} division_of cbox a b"
+        by (simp add: assms division_of_self)
+      then show "insert (cbox a b) (p - {cbox u v}) division_of cbox a b \<union> \<Union>(p - {cbox u v})"
+        by (metis (no_types) Diff_subset \<open>interior (cbox a b) \<inter> interior (\<Union>(p - {cbox u v})) = {}\<close> division_disjoint_union division_of_subset insert_is_Un p(1) p(8))
+    qed
+    with that[of "p - {cbox u v}"] show ?thesis by (simp add: cbe)
   qed
 qed
 
@@ -1323,21 +1250,21 @@ proof -
           presume "k = cbox a b \<Longrightarrow> ?thesis"
             and "k' = cbox a b \<Longrightarrow> ?thesis"
             and "k \<noteq> cbox a b \<Longrightarrow> k' \<noteq> cbox a b \<Longrightarrow> ?thesis"
-          then show ?thesis by auto
+          then show ?thesis by linarith
         next
           assume as': "k  = cbox a b"
           show ?thesis
-            using as' k' q(5) x' by auto
+            using as' k' q(5) x' by blast 
         next
           assume as': "k' = cbox a b"
           show ?thesis
-            using as' k'(2) q(5) x by auto
+            using as' k'(2) q(5) x by blast
         }
         assume as': "k \<noteq> cbox a b" "k' \<noteq> cbox a b"
         obtain c d where k: "k = cbox c d"
           using q(4)[OF x(2,1)] by blast
         have "interior k \<inter> interior (cbox a b) = {}"
-          using as' k'(2) q(5) x by auto
+          using as' k'(2) q(5) x by blast
         then have "interior k \<subseteq> interior x"
         using interior_subset_union_intervals
           by (metis as(2) k q(2) x interior_subset_union_intervals)
@@ -1345,7 +1272,7 @@ proof -
         obtain c d where c_d: "k' = cbox c d"
           using q(4)[OF x'(2,1)] by blast
         have "interior k' \<inter> interior (cbox a b) = {}"
-          using as'(2) q(5) x' by auto
+          using as'(2) q(5) x' by blast
         then have "interior k' \<subseteq> interior x'"
           by (metis as(2) c_d interior_subset_union_intervals q(2) x'(1) x'(2))
         ultimately show ?thesis
@@ -2113,7 +2040,7 @@ proof -
     if e: "0 < e" for e
   proof -
     obtain n where n: "(\<Sum>i\<in>Basis. b \<bullet> i - a \<bullet> i) / e < 2 ^ n"
-      using real_arch_pow2[of "(setsum (\<lambda>i. b\<bullet>i - a\<bullet>i) Basis) / e"] ..
+      using real_arch_pow[of 2 "(setsum (\<lambda>i. b\<bullet>i - a\<bullet>i) Basis) / e"] by auto
     show ?thesis
     proof (rule exI [where x=n], clarify)
       fix x y
@@ -2951,7 +2878,7 @@ next
   have "Cauchy (\<lambda>n. setsum (\<lambda>(x,k). content k *\<^sub>R (f x)) (p n))"
   proof (rule CauchyI, goal_cases)
     case (1 e)
-    then guess N unfolding real_arch_inv[of e] .. note N=this
+    then guess N unfolding real_arch_inverse[of e] .. note N=this
     show ?case
       apply (rule_tac x=N in exI)
     proof clarify
@@ -2971,7 +2898,7 @@ next
     fix e :: real
     assume "e>0"
     then have *:"e/2 > 0" by auto
-    then guess N1 unfolding real_arch_inv[of "e/2"] .. note N1=this
+    then guess N1 unfolding real_arch_inverse[of "e/2"] .. note N1=this
     then have N1': "N1 = N1 - 1 + 1"
       by auto
     guess N2 using y[OF *] .. note N2=this
@@ -4599,6 +4526,10 @@ lemma integral_component_ubound_real:
 
 subsection \<open>Uniform limit of integrable functions is integrable.\<close>
 
+lemma real_arch_invD:
+  "0 < (e::real) \<Longrightarrow> (\<exists>n::nat. n \<noteq> 0 \<and> 0 < inverse (real n) \<and> inverse (real n) < e)"
+  by (subst(asm) real_arch_inverse)
+
 lemma integrable_uniform_limit:
   fixes f :: "'a::euclidean_space \<Rightarrow> 'b::banach"
   assumes "\<forall>e>0. \<exists>g. (\<forall>x\<in>cbox a b. norm (f x - g x) \<le> e) \<and> g integrable_on cbox a b"
@@ -4624,7 +4555,7 @@ next
       using True by (auto simp add: field_simps)
     then obtain M :: nat
          where M: "M \<noteq> 0" "0 < inverse (real_of_nat M)" "inverse (of_nat M) < e / 4 / content (cbox a b)"
-      by (subst (asm) real_arch_inv) auto
+      by (subst (asm) real_arch_inverse) auto
     show "\<exists>M. \<forall>m\<ge>M. \<forall>n\<ge>M. dist (i m) (i n) < e"
     proof (rule exI [where x=M], clarify)
       fix m n

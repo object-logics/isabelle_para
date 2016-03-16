@@ -5525,7 +5525,7 @@ next
       fix e :: real
       assume "e > 0"
       then obtain N :: nat where "N \<noteq> 0" and N: "0 < inverse (real N) \<and> inverse (real N) < e"
-        unfolding real_arch_inv[of e] by auto
+        unfolding real_arch_inverse[of e] by auto
       {
         fix n :: nat
         assume "n \<ge> N"
@@ -7310,7 +7310,7 @@ proof -
   finally show "closed (cbox a b)" .
 qed
 
-lemma interior_cbox [intro]:
+lemma interior_cbox [simp]:
   fixes a b :: "'a::euclidean_space"
   shows "interior (cbox a b) = box a b" (is "?L = ?R")
 proof(rule subset_antisym)
@@ -7376,7 +7376,7 @@ proof -
     unfolding cbox_def bounded_iff by auto
 qed
 
-lemma bounded_box:
+lemma bounded_box [simp]:
   fixes a :: "'a::euclidean_space"
   shows "bounded (box a b)"
   using bounded_cbox[of a b]
@@ -7384,12 +7384,12 @@ lemma bounded_box:
   using bounded_subset[of "cbox a b" "box a b"]
   by simp
 
-lemma not_interval_univ:
+lemma not_interval_UNIV [simp]:
   fixes a :: "'a::euclidean_space"
   shows "cbox a b \<noteq> UNIV" "box a b \<noteq> UNIV"
-  using bounded_box[of a b] bounded_cbox[of a b] by auto
+  using bounded_box[of a b] bounded_cbox[of a b] by force+
 
-lemma compact_cbox:
+lemma compact_cbox [simp]:
   fixes a :: "'a::euclidean_space"
   shows "compact (cbox a b)"
   using bounded_closed_imp_seq_compact[of "cbox a b"] using bounded_cbox[of a b]
@@ -7492,7 +7492,7 @@ proof -
         fix e :: real
         assume "e > 0"
         then have "\<exists>N::nat. inverse (real (N + 1)) < e"
-          using real_arch_inv[of e]
+          using real_arch_inverse[of e]
           apply (auto simp add: Suc_pred')
           apply (metis Suc_pred' of_nat_Suc)
           done
@@ -7792,10 +7792,10 @@ lemma homeomorphic_sym: "s homeomorphic t \<longleftrightarrow> t homeomorphic s
   unfolding homeomorphism_def
   by blast
 
-lemma homeomorphic_trans:
+lemma homeomorphic_trans [trans]:
   assumes "s homeomorphic t"
-    and "t homeomorphic u"
-  shows "s homeomorphic u"
+      and "t homeomorphic u"
+    shows "s homeomorphic u"
 proof -
   obtain f1 g1 where fg1: "\<forall>x\<in>s. g1 (f1 x) = x"  "f1 ` s = t"
     "continuous_on s f1" "\<forall>y\<in>t. f1 (g1 y) = y" "g1 ` t = s" "continuous_on t g1"

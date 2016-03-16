@@ -739,6 +739,22 @@ lemma arc_assoc:
       \<Longrightarrow> arc(p +++ (q +++ r)) \<longleftrightarrow> arc((p +++ q) +++ r)"
 by (simp add: arc_simple_path simple_path_assoc)
 
+subsubsection\<open>Symmetry and loops\<close>
+
+lemma path_sym:
+    "\<lbrakk>pathfinish p = pathstart q; pathfinish q = pathstart p\<rbrakk> \<Longrightarrow> path(p +++ q) \<longleftrightarrow> path(q +++ p)"
+  by auto
+
+lemma simple_path_sym:
+    "\<lbrakk>pathfinish p = pathstart q; pathfinish q = pathstart p\<rbrakk>
+     \<Longrightarrow> simple_path(p +++ q) \<longleftrightarrow> simple_path(q +++ p)"
+by (metis (full_types) inf_commute insert_commute simple_path_joinE simple_path_join_loop)
+
+lemma path_image_sym:
+    "\<lbrakk>pathfinish p = pathstart q; pathfinish q = pathstart p\<rbrakk>
+     \<Longrightarrow> path_image(p +++ q) = path_image(q +++ p)"
+by (simp add: path_image_join sup_commute)
+
 
 section\<open>Choosing a subpath of an existing path\<close>
 
@@ -1152,7 +1168,7 @@ lemma continuous_on_linepath [intro,continuous_intros]: "continuous_on s (linepa
   using continuous_linepath_at
   by (auto intro!: continuous_at_imp_continuous_on)
 
-lemma path_linepath[intro]: "path (linepath a b)"
+lemma path_linepath[iff]: "path (linepath a b)"
   unfolding path_def
   by (rule continuous_on_linepath)
 
@@ -1168,8 +1184,7 @@ lemma linepath_0 [simp]: "linepath 0 b x = x *\<^sub>R b"
   by (simp add: linepath_def)
 
 lemma arc_linepath:
-  assumes "a \<noteq> b"
-  shows "arc (linepath a b)"
+  assumes "a \<noteq> b" shows [simp]: "arc (linepath a b)"
 proof -
   {
     fix x y :: "real"
@@ -1192,6 +1207,54 @@ lemma linepath_trivial [simp]: "linepath a a x = a"
 
 lemma subpath_refl: "subpath a a g = linepath (g a) (g a)"
   by (simp add: subpath_def linepath_def algebra_simps)
+
+lemma linepath_of_real: "(linepath (of_real a) (of_real b) x) = of_real ((1 - x)*a + x*b)"
+  by (simp add: scaleR_conv_of_real linepath_def)
+
+lemma of_real_linepath: "of_real (linepath a b x) = linepath (of_real a) (of_real b) x"
+  by (metis linepath_of_real mult.right_neutral of_real_def real_scaleR_def)
+
+
+subsection\<open>Segments via convex hulls\<close>
+
+lemma segments_subset_convex_hull:
+    "closed_segment a b \<subseteq> (convex hull {a,b,c})"
+    "closed_segment a c \<subseteq> (convex hull {a,b,c})"
+    "closed_segment b c \<subseteq> (convex hull {a,b,c})"
+    "closed_segment b a \<subseteq> (convex hull {a,b,c})"
+    "closed_segment c a \<subseteq> (convex hull {a,b,c})"
+    "closed_segment c b \<subseteq> (convex hull {a,b,c})"
+by (auto simp: segment_convex_hull linepath_of_real  elim!: rev_subsetD [OF _ hull_mono])
+
+lemma midpoints_in_convex_hull:
+  assumes "x \<in> convex hull s" "y \<in> convex hull s"
+    shows "midpoint x y \<in> convex hull s"
+proof -
+  have "(1 - inverse(2)) *\<^sub>R x + inverse(2) *\<^sub>R y \<in> convex hull s"
+    apply (rule convexD_alt)
+    using assms
+    apply (auto simp: convex_convex_hull)
+    done
+  then show ?thesis
+    by (simp add: midpoint_def algebra_simps)
+qed
+
+lemma convex_hull_subset:
+    "s \<subseteq> convex hull t \<Longrightarrow> convex hull s \<subseteq> convex hull t"
+  by (simp add: convex_convex_hull subset_hull)
+
+lemma not_in_interior_convex_hull_3:
+  fixes a :: "complex"
+  shows "a \<notin> interior(convex hull {a,b,c})"
+        "b \<notin> interior(convex hull {a,b,c})"
+        "c \<notin> interior(convex hull {a,b,c})"
+  by (auto simp: card_insert_le_m1 not_in_interior_convex_hull)
+
+lemma midpoint_in_closed_segment [simp]: "midpoint a b \<in> closed_segment a b"
+  using midpoints_in_convex_hull segment_convex_hull by blast
+
+lemma midpoint_in_open_segment [simp]: "midpoint a b \<in> open_segment a b \<longleftrightarrow> a \<noteq> b"
+  by (simp add: midpoint_eq_endpoint(1) midpoint_eq_endpoint(2) open_segment_def)
 
 
 subsection \<open>Bounding a point away from a path\<close>
@@ -1287,7 +1350,7 @@ lemma path_connected_linepath:
   done
 
 
-text \<open>Can also consider it as a set, as the name suggests.\<close>
+subsubsection \<open>Path components as sets\<close>
 
 lemma path_component_set:
   "path_component_set s x =
@@ -1325,7 +1388,7 @@ lemma path_component_maximal:
      "\<lbrakk>x \<in> t; path_connected t; t \<subseteq> s\<rbrakk> \<Longrightarrow> t \<subseteq> (path_component_set s x)"
   by (metis path_component_mono path_connected_component_set)
 
-subsection \<open>Some useful lemmas about path-connectedness\<close>
+subsection \<open>More about path-connectedness\<close>
 
 lemma convex_imp_path_connected:
   fixes s :: "'a::real_normed_vector set"
@@ -1339,6 +1402,12 @@ lemma convex_imp_path_connected:
   using assms [unfolded convex_contains_segment]
   apply auto
   done
+
+lemma path_connected_UNIV [iff]: "path_connected (UNIV :: 'a::real_normed_vector set)"
+  by (simp add: convex_imp_path_connected)
+
+lemma path_component_UNIV: "path_component_set UNIV x = (UNIV :: 'a::real_normed_vector set)"
+  using path_connected_component_set by auto
 
 lemma path_connected_imp_connected:
   assumes "path_connected s"
@@ -1631,6 +1700,72 @@ next
   case False then show ?thesis
     using path_component_eq_empty by auto
 qed
+
+subsection\<open>Lemmas about path-connectedness\<close>
+
+lemma path_connected_linear_image:
+  fixes f :: "'a::real_normed_vector \<Rightarrow> 'b::real_normed_vector"
+  assumes "path_connected s" "bounded_linear f"
+    shows "path_connected(f ` s)"
+by (auto simp: linear_continuous_on assms path_connected_continuous_image)
+
+lemma is_interval_path_connected: "is_interval s \<Longrightarrow> path_connected s"
+  by (simp add: convex_imp_path_connected is_interval_convex)
+
+lemma linear_homeomorphic_image:
+  fixes f :: "'a::euclidean_space \<Rightarrow> 'a"
+  assumes "linear f" "inj f"
+    shows "s homeomorphic f ` s"
+    using assms unfolding homeomorphic_def homeomorphism_def
+    apply (rule_tac x=f in exI)
+    apply (rule_tac x="inv f" in exI)
+    using inj_linear_imp_inv_linear linear_continuous_on
+    apply (auto simp:  linear_conv_bounded_linear)
+    done
+
+lemma path_connected_Times:
+  assumes "path_connected s" "path_connected t"
+    shows "path_connected (s \<times> t)"
+proof (simp add: path_connected_def Sigma_def, clarify)
+  fix x1 y1 x2 y2
+  assume "x1 \<in> s" "y1 \<in> t" "x2 \<in> s" "y2 \<in> t"
+  obtain g where "path g" and g: "path_image g \<subseteq> s" and gs: "pathstart g = x1" and gf: "pathfinish g = x2"
+    using \<open>x1 \<in> s\<close> \<open>x2 \<in> s\<close> assms by (force simp: path_connected_def)
+  obtain h where "path h" and h: "path_image h \<subseteq> t" and hs: "pathstart h = y1" and hf: "pathfinish h = y2"
+    using \<open>y1 \<in> t\<close> \<open>y2 \<in> t\<close> assms by (force simp: path_connected_def)
+  have "path (\<lambda>z. (x1, h z))"
+    using \<open>path h\<close>
+    apply (simp add: path_def)
+    apply (rule continuous_on_compose2 [where f = h])
+    apply (rule continuous_intros | force)+
+    done
+  moreover have "path (\<lambda>z. (g z, y2))"
+    using \<open>path g\<close>
+    apply (simp add: path_def)
+    apply (rule continuous_on_compose2 [where f = g])
+    apply (rule continuous_intros | force)+
+    done
+  ultimately have 1: "path ((\<lambda>z. (x1, h z)) +++ (\<lambda>z. (g z, y2)))"
+    by (metis hf gs path_join_imp pathstart_def pathfinish_def)
+  have "path_image ((\<lambda>z. (x1, h z)) +++ (\<lambda>z. (g z, y2))) \<subseteq> path_image (\<lambda>z. (x1, h z)) \<union> path_image (\<lambda>z. (g z, y2))"
+    by (rule Path_Connected.path_image_join_subset)
+  also have "... \<subseteq> (\<Union>x\<in>s. \<Union>x1\<in>t. {(x, x1)})"
+    using g h \<open>x1 \<in> s\<close> \<open>y2 \<in> t\<close> by (force simp: path_image_def)
+  finally have 2: "path_image ((\<lambda>z. (x1, h z)) +++ (\<lambda>z. (g z, y2))) \<subseteq> (\<Union>x\<in>s. \<Union>x1\<in>t. {(x, x1)})" .
+  show "\<exists>g. path g \<and> path_image g \<subseteq> (\<Union>x\<in>s. \<Union>x1\<in>t. {(x, x1)}) \<and>
+            pathstart g = (x1, y1) \<and> pathfinish g = (x2, y2)"
+    apply (intro exI conjI)
+       apply (rule 1)
+      apply (rule 2)
+     apply (metis hs pathstart_def pathstart_join)
+    by (metis gf pathfinish_def pathfinish_join)
+qed
+
+lemma is_interval_path_connected_1:
+  fixes s :: "real set"
+  shows "is_interval s \<longleftrightarrow> path_connected s"
+using is_interval_connected_1 is_interval_path_connected path_connected_imp_connected by blast
+
 
 subsection \<open>Sphere is path-connected\<close>
 
@@ -2237,6 +2372,45 @@ proof -
   }
   then show ?thesis by (auto simp: frontier_def)
 qed
+
+lemma frontier_Union_subset_closure:
+  fixes F :: "'a::real_normed_vector set set"
+  shows "frontier(\<Union>F) \<subseteq> closure(\<Union>t \<in> F. frontier t)"
+proof -
+  have "\<exists>y\<in>F. \<exists>y\<in>frontier y. dist y x < e"
+       if "T \<in> F" "y \<in> T" "dist y x < e"
+          "x \<notin> interior (\<Union>F)" "0 < e" for x y e T
+  proof (cases "x \<in> T")
+    case True with that show ?thesis
+      by (metis Diff_iff Sup_upper closure_subset contra_subsetD dist_self frontier_def interior_mono)
+  next
+    case False
+    have 1: "closed_segment x y \<inter> T \<noteq> {}" using \<open>y \<in> T\<close> by blast
+    have 2: "closed_segment x y - T \<noteq> {}"
+      using False by blast
+    obtain c where "c \<in> closed_segment x y" "c \<in> frontier T"
+       using False connected_Int_frontier [OF connected_segment 1 2] by auto
+    then show ?thesis
+    proof -
+      have "norm (y - x) < e"
+        by (metis dist_norm \<open>dist y x < e\<close>)
+      moreover have "norm (c - x) \<le> norm (y - x)"
+        by (simp add: \<open>c \<in> closed_segment x y\<close> segment_bound(1))
+      ultimately have "norm (c - x) < e"
+        by linarith
+      then show ?thesis
+        by (metis (no_types) \<open>c \<in> frontier T\<close> dist_norm that(1))
+    qed
+  qed
+  then show ?thesis
+    by (fastforce simp add: frontier_def closure_approachable)
+qed
+
+lemma frontier_Union_subset:
+  fixes F :: "'a::real_normed_vector set set"
+  shows "finite F \<Longrightarrow> frontier(\<Union>F) \<subseteq> (\<Union>t \<in> F. frontier t)"
+by (rule order_trans [OF frontier_Union_subset_closure])
+   (auto simp: closure_subset_eq)
 
 lemma connected_component_UNIV:
     fixes x :: "'a::real_normed_vector"
@@ -2954,9 +3128,9 @@ proposition homotopic_with_compose_continuous_left:
   done
 
 proposition homotopic_compose_continuous_left:
-   "homotopic_with (\<lambda>f. True) X Y f g \<and>
-        continuous_on Y h \<and> image h Y \<subseteq> Z
-        \<Longrightarrow> homotopic_with (\<lambda>f. True) X Z (h o f) (h o g)"
+   "\<lbrakk>homotopic_with (\<lambda>_. True) X Y f g;
+     continuous_on Y h; h ` Y \<subseteq> Z\<rbrakk>
+    \<Longrightarrow> homotopic_with (\<lambda>f. True) X Z (h o f) (h o g)"
   using homotopic_with_compose_continuous_left by fastforce
 
 proposition homotopic_with_Pair:
@@ -3662,5 +3836,484 @@ proposition homotopic_join_subpaths:
     \<Longrightarrow> homotopic_paths s (subpath u v g +++ subpath v w g) (subpath u w g)"
 apply (rule le_cases3 [of u v w])
 using homotopic_join_subpaths1 homotopic_join_subpaths2 homotopic_join_subpaths3 by metis+
+
+text\<open>Relating homotopy of trivial loops to path-connectedness.\<close>
+
+lemma path_component_imp_homotopic_points:
+    "path_component S a b \<Longrightarrow> homotopic_loops S (linepath a a) (linepath b b)"
+apply (simp add: path_component_def homotopic_loops_def homotopic_with_def
+                 pathstart_def pathfinish_def path_image_def path_def, clarify)
+apply (rule_tac x="g o fst" in exI)
+apply (intro conjI continuous_intros continuous_on_compose)+
+apply (auto elim!: continuous_on_subset)
+done
+
+lemma homotopic_loops_imp_path_component_value:
+   "\<lbrakk>homotopic_loops S p q; 0 \<le> t; t \<le> 1\<rbrakk>
+        \<Longrightarrow> path_component S (p t) (q t)"
+apply (simp add: path_component_def homotopic_loops_def homotopic_with_def
+                 pathstart_def pathfinish_def path_image_def path_def, clarify)
+apply (rule_tac x="h o (\<lambda>u. (u, t))" in exI)
+apply (intro conjI continuous_intros continuous_on_compose)+
+apply (auto elim!: continuous_on_subset)
+done
+
+lemma homotopic_points_eq_path_component:
+   "homotopic_loops S (linepath a a) (linepath b b) \<longleftrightarrow>
+        path_component S a b"
+by (auto simp: path_component_imp_homotopic_points 
+         dest: homotopic_loops_imp_path_component_value [where t=1])
+
+lemma path_connected_eq_homotopic_points:
+    "path_connected S \<longleftrightarrow>
+      (\<forall>a b. a \<in> S \<and> b \<in> S \<longrightarrow> homotopic_loops S (linepath a a) (linepath b b))"
+by (auto simp: path_connected_def path_component_def homotopic_points_eq_path_component)
+
+
+subsection\<open>Simply connected sets\<close>
+
+text\<open>defined as "all loops are homotopic (as loops)\<close>
+
+definition simply_connected where
+  "simply_connected S \<equiv>
+        \<forall>p q. path p \<and> pathfinish p = pathstart p \<and> path_image p \<subseteq> S \<and>
+              path q \<and> pathfinish q = pathstart q \<and> path_image q \<subseteq> S
+              \<longrightarrow> homotopic_loops S p q"
+
+lemma simply_connected_empty [iff]: "simply_connected {}"
+  by (simp add: simply_connected_def)
+
+lemma simply_connected_imp_path_connected:
+  fixes S :: "_::real_normed_vector set"
+  shows "simply_connected S \<Longrightarrow> path_connected S"
+by (simp add: simply_connected_def path_connected_eq_homotopic_points)
+
+lemma simply_connected_imp_connected:
+  fixes S :: "_::real_normed_vector set"
+  shows "simply_connected S \<Longrightarrow> connected S"
+by (simp add: path_connected_imp_connected simply_connected_imp_path_connected)
+
+lemma simply_connected_eq_contractible_loop_any:
+  fixes S :: "_::real_normed_vector set"
+  shows "simply_connected S \<longleftrightarrow>
+            (\<forall>p a. path p \<and> path_image p \<subseteq> S \<and>
+                  pathfinish p = pathstart p \<and> a \<in> S
+                  \<longrightarrow> homotopic_loops S p (linepath a a))"
+apply (simp add: simply_connected_def)
+apply (rule iffI, force, clarify)
+apply (rule_tac q = "linepath (pathstart p) (pathstart p)" in homotopic_loops_trans)
+apply (fastforce simp add:)
+using homotopic_loops_sym apply blast
+done
+
+lemma simply_connected_eq_contractible_loop_some:
+  fixes S :: "_::real_normed_vector set"
+  shows "simply_connected S \<longleftrightarrow>
+                path_connected S \<and>
+                (\<forall>p. path p \<and> path_image p \<subseteq> S \<and> pathfinish p = pathstart p
+                    \<longrightarrow> (\<exists>a. a \<in> S \<and> homotopic_loops S p (linepath a a)))"
+apply (rule iffI)
+ apply (fastforce simp: simply_connected_imp_path_connected simply_connected_eq_contractible_loop_any)
+apply (clarsimp simp add: simply_connected_eq_contractible_loop_any)
+apply (drule_tac x=p in spec)
+using homotopic_loops_trans path_connected_eq_homotopic_points 
+  apply blast
+done
+
+lemma simply_connected_eq_contractible_loop_all: 
+  fixes S :: "_::real_normed_vector set"
+  shows "simply_connected S \<longleftrightarrow>
+         S = {} \<or>
+         (\<exists>a \<in> S. \<forall>p. path p \<and> path_image p \<subseteq> S \<and> pathfinish p = pathstart p
+                \<longrightarrow> homotopic_loops S p (linepath a a))"
+        (is "?lhs = ?rhs")
+proof (cases "S = {}")
+  case True then show ?thesis by force
+next
+  case False
+  then obtain a where "a \<in> S" by blast
+  show ?thesis
+  proof  
+    assume "simply_connected S"
+    then show ?rhs
+      using \<open>a \<in> S\<close> \<open>simply_connected S\<close> simply_connected_eq_contractible_loop_any 
+      by blast
+  next     
+    assume ?rhs
+    then show "simply_connected S"
+      apply (simp add: simply_connected_eq_contractible_loop_any False)
+      by (meson homotopic_loops_refl homotopic_loops_sym homotopic_loops_trans 
+             path_component_imp_homotopic_points path_component_refl)
+  qed
+qed
+
+lemma simply_connected_eq_contractible_path: 
+  fixes S :: "_::real_normed_vector set"
+  shows "simply_connected S \<longleftrightarrow>
+           path_connected S \<and>
+           (\<forall>p. path p \<and> path_image p \<subseteq> S \<and> pathfinish p = pathstart p
+            \<longrightarrow> homotopic_paths S p (linepath (pathstart p) (pathstart p)))"
+apply (rule iffI)
+ apply (simp add: simply_connected_imp_path_connected)
+ apply (metis simply_connected_eq_contractible_loop_some homotopic_loops_imp_homotopic_paths_null)
+by (meson homotopic_paths_imp_homotopic_loops pathfinish_linepath pathstart_in_path_image 
+         simply_connected_eq_contractible_loop_some subset_iff)
+
+lemma simply_connected_eq_homotopic_paths:
+  fixes S :: "_::real_normed_vector set"
+  shows "simply_connected S \<longleftrightarrow>
+          path_connected S \<and>
+          (\<forall>p q. path p \<and> path_image p \<subseteq> S \<and>
+                path q \<and> path_image q \<subseteq> S \<and>
+                pathstart q = pathstart p \<and> pathfinish q = pathfinish p
+                \<longrightarrow> homotopic_paths S p q)"
+         (is "?lhs = ?rhs")
+proof
+  assume ?lhs
+  then have pc: "path_connected S" 
+        and *:  "\<And>p. \<lbrakk>path p; path_image p \<subseteq> S;
+                       pathfinish p = pathstart p\<rbrakk> 
+                      \<Longrightarrow> homotopic_paths S p (linepath (pathstart p) (pathstart p))"
+    by (auto simp: simply_connected_eq_contractible_path)
+  have "homotopic_paths S p q" 
+        if "path p" "path_image p \<subseteq> S" "path q"
+           "path_image q \<subseteq> S" "pathstart q = pathstart p"
+           "pathfinish q = pathfinish p" for p q
+  proof -
+    have "homotopic_paths S p (p +++ linepath (pathfinish p) (pathfinish p))" 
+      by (simp add: homotopic_paths_rid homotopic_paths_sym that)
+    also have "homotopic_paths S (p +++ linepath (pathfinish p) (pathfinish p))
+                                 (p +++ reversepath q +++ q)"
+      using that
+      by (metis homotopic_paths_join homotopic_paths_linv homotopic_paths_refl homotopic_paths_sym_eq pathstart_linepath)
+    also have "homotopic_paths S (p +++ reversepath q +++ q) 
+                                 ((p +++ reversepath q) +++ q)"
+      by (simp add: that homotopic_paths_assoc)
+    also have "homotopic_paths S ((p +++ reversepath q) +++ q)
+                                 (linepath (pathstart q) (pathstart q) +++ q)"
+      using * [of "p +++ reversepath q"] that
+      by (simp add: homotopic_paths_join path_image_join)
+    also have "homotopic_paths S (linepath (pathstart q) (pathstart q) +++ q) q"
+      using that homotopic_paths_lid by blast
+    finally show ?thesis .
+  qed
+  then show ?rhs
+    by (blast intro: pc *)
+next
+  assume ?rhs 
+  then show ?lhs
+    by (force simp: simply_connected_eq_contractible_path)
+qed
+
+proposition simply_connected_Times:
+  fixes S :: "'a::real_normed_vector set" and T :: "'b::real_normed_vector set"
+  assumes S: "simply_connected S" and T: "simply_connected T"
+    shows "simply_connected(S \<times> T)"
+proof -
+  have "homotopic_loops (S \<times> T) p (linepath (a, b) (a, b))"
+       if "path p" "path_image p \<subseteq> S \<times> T" "p 1 = p 0" "a \<in> S" "b \<in> T"
+       for p a b
+  proof -
+    have "path (fst \<circ> p)"
+      apply (rule Path_Connected.path_continuous_image [OF \<open>path p\<close>])
+      apply (rule continuous_intros)+
+      done
+    moreover have "path_image (fst \<circ> p) \<subseteq> S"
+      using that apply (simp add: path_image_def) by force
+    ultimately have p1: "homotopic_loops S (fst o p) (linepath a a)"
+      using S that
+      apply (simp add: simply_connected_eq_contractible_loop_any)
+      apply (drule_tac x="fst o p" in spec)
+      apply (drule_tac x=a in spec)
+      apply (auto simp: pathstart_def pathfinish_def)
+      done
+    have "path (snd \<circ> p)"
+      apply (rule Path_Connected.path_continuous_image [OF \<open>path p\<close>])
+      apply (rule continuous_intros)+
+      done
+    moreover have "path_image (snd \<circ> p) \<subseteq> T"
+      using that apply (simp add: path_image_def) by force
+    ultimately have p2: "homotopic_loops T (snd o p) (linepath b b)"
+      using T that
+      apply (simp add: simply_connected_eq_contractible_loop_any)
+      apply (drule_tac x="snd o p" in spec)
+      apply (drule_tac x=b in spec)
+      apply (auto simp: pathstart_def pathfinish_def)
+      done
+    show ?thesis
+      using p1 p2
+      apply (simp add: homotopic_loops, clarify)
+      apply (rename_tac h k)
+      apply (rule_tac x="\<lambda>z. Pair (h z) (k z)" in exI)
+      apply (intro conjI continuous_intros | assumption)+
+      apply (auto simp: pathstart_def pathfinish_def)
+      done
+  qed
+  with assms show ?thesis
+    by (simp add: simply_connected_eq_contractible_loop_any pathfinish_def pathstart_def)
+qed
+
+subsection\<open>Contractible sets\<close>
+
+definition contractible where
+ "contractible S \<equiv> \<exists>a. homotopic_with (\<lambda>x. True) S S id (\<lambda>x. a)"
+
+proposition contractible_imp_simply_connected:
+  fixes S :: "_::real_normed_vector set"
+  assumes "contractible S" shows "simply_connected S"
+proof (cases "S = {}")
+  case True then show ?thesis by force
+next
+  case False
+  obtain a where a: "homotopic_with (\<lambda>x. True) S S id (\<lambda>x. a)"
+    using assms by (force simp add: contractible_def)
+  then have "a \<in> S"
+    by (metis False homotopic_constant_maps homotopic_with_symD homotopic_with_trans path_component_mem(2))
+  show ?thesis
+    apply (simp add: simply_connected_eq_contractible_loop_all False)
+    apply (rule bexI [OF _ \<open>a \<in> S\<close>])
+    using a apply (simp add: homotopic_loops_def homotopic_with_def path_def path_image_def pathfinish_def pathstart_def)
+    apply clarify
+    apply (rule_tac x="(h o (\<lambda>y. (fst y, (p \<circ> snd) y)))" in exI)
+    apply (intro conjI continuous_on_compose continuous_intros)
+    apply (erule continuous_on_subset | force)+
+    done
+qed
+
+corollary contractible_imp_connected:
+  fixes S :: "_::real_normed_vector set"
+  shows "contractible S \<Longrightarrow> connected S"
+by (simp add: contractible_imp_simply_connected simply_connected_imp_connected)
+
+lemma contractible_imp_path_connected:
+  fixes S :: "_::real_normed_vector set"
+  shows "contractible S \<Longrightarrow> path_connected S"
+by (simp add: contractible_imp_simply_connected simply_connected_imp_path_connected)
+
+lemma nullhomotopic_through_contractible:
+  fixes S :: "_::topological_space set"
+  assumes f: "continuous_on S f" "f ` S \<subseteq> T"
+      and g: "continuous_on T g" "g ` T \<subseteq> U"
+      and T: "contractible T"
+    obtains c where "homotopic_with (\<lambda>h. True) S U (g o f) (\<lambda>x. c)"
+proof -
+  obtain b where b: "homotopic_with (\<lambda>x. True) T T id (\<lambda>x. b)"
+    using assms by (force simp add: contractible_def)
+  have "homotopic_with (\<lambda>f. True) T U (g \<circ> id) (g \<circ> (\<lambda>x. b))"
+    by (rule homotopic_compose_continuous_left [OF b g])
+  then have "homotopic_with (\<lambda>f. True) S U (g \<circ> id \<circ> f) (g \<circ> (\<lambda>x. b) \<circ> f)"
+    by (rule homotopic_compose_continuous_right [OF _ f])
+  then show ?thesis
+    by (simp add: comp_def that)
+qed
+
+lemma nullhomotopic_into_contractible:
+  assumes f: "continuous_on S f" "f ` S \<subseteq> T"
+      and T: "contractible T"
+    obtains c where "homotopic_with (\<lambda>h. True) S T f (\<lambda>x. c)"
+apply (rule nullhomotopic_through_contractible [OF f, of id T])
+using assms
+apply (auto simp: continuous_on_id)
+done
+
+lemma nullhomotopic_from_contractible:
+  assumes f: "continuous_on S f" "f ` S \<subseteq> T"
+      and S: "contractible S"
+    obtains c where "homotopic_with (\<lambda>h. True) S T f (\<lambda>x. c)"
+apply (rule nullhomotopic_through_contractible [OF continuous_on_id _ f S, of S])
+using assms
+apply (auto simp: comp_def)
+done
+
+lemma homotopic_through_contractible:
+  fixes S :: "_::real_normed_vector set"
+  assumes "continuous_on S f1" "f1 ` S \<subseteq> T"
+          "continuous_on T g1" "g1 ` T \<subseteq> U"
+          "continuous_on S f2" "f2 ` S \<subseteq> T"
+          "continuous_on T g2" "g2 ` T \<subseteq> U"
+          "contractible T" "path_connected U"
+   shows "homotopic_with (\<lambda>h. True) S U (g1 o f1) (g2 o f2)"
+proof -
+  obtain c1 where c1: "homotopic_with (\<lambda>h. True) S U (g1 o f1) (\<lambda>x. c1)"
+    apply (rule nullhomotopic_through_contractible [of S f1 T g1 U])
+    using assms apply (auto simp: )
+    done
+  obtain c2 where c2: "homotopic_with (\<lambda>h. True) S U (g2 o f2) (\<lambda>x. c2)"
+    apply (rule nullhomotopic_through_contractible [of S f2 T g2 U])
+    using assms apply (auto simp: )
+    done
+  have *: "S = {} \<or> (\<exists>t. path_connected t \<and> t \<subseteq> U \<and> c2 \<in> t \<and> c1 \<in> t)"
+  proof (cases "S = {}")
+    case True then show ?thesis by force
+  next
+    case False
+    with c1 c2 have "c1 \<in> U" "c2 \<in> U"
+      using homotopic_with_imp_subset2 all_not_in_conv image_subset_iff by blast+
+    with \<open>path_connected U\<close> show ?thesis by blast
+  qed
+  show ?thesis
+    apply (rule homotopic_with_trans [OF c1])
+    apply (rule homotopic_with_symD)
+    apply (rule homotopic_with_trans [OF c2])
+    apply (simp add: path_component homotopic_constant_maps *)
+    done
+qed
+
+lemma homotopic_into_contractible:
+  fixes S :: "'a::real_normed_vector set" and T:: "'b::real_normed_vector set"
+  assumes f: "continuous_on S f" "f ` S \<subseteq> T"
+      and g: "continuous_on S g" "g ` S \<subseteq> T"
+      and T: "contractible T"
+    shows "homotopic_with (\<lambda>h. True) S T f g"
+using homotopic_through_contractible [of S f T id T g id]
+by (simp add: assms contractible_imp_path_connected continuous_on_id)
+
+lemma homotopic_from_contractible:
+  fixes S :: "'a::real_normed_vector set" and T:: "'b::real_normed_vector set"
+  assumes f: "continuous_on S f" "f ` S \<subseteq> T"
+      and g: "continuous_on S g" "g ` S \<subseteq> T"
+      and "contractible S" "path_connected T"
+    shows "homotopic_with (\<lambda>h. True) S T f g"
+using homotopic_through_contractible [of S id S f T id g]
+by (simp add: assms contractible_imp_path_connected continuous_on_id)
+
+lemma starlike_imp_contractible_gen:
+  fixes S :: "'a::real_normed_vector set"
+  assumes S: "starlike S"
+      and P: "\<And>a T. \<lbrakk>a \<in> S; 0 \<le> T; T \<le> 1\<rbrakk> \<Longrightarrow> P(\<lambda>x. (1 - T) *\<^sub>R x + T *\<^sub>R a)"
+    obtains a where "homotopic_with P S S (\<lambda>x. x) (\<lambda>x. a)"
+proof -
+  obtain a where "a \<in> S" and a: "\<And>x. x \<in> S \<Longrightarrow> closed_segment a x \<subseteq> S"
+    using S by (auto simp add: starlike_def)
+  have "(\<lambda>y. (1 - fst y) *\<^sub>R snd y + fst y *\<^sub>R a) ` ({0..1} \<times> S) \<subseteq> S"
+    apply clarify
+    apply (erule a [unfolded closed_segment_def, THEN subsetD])
+    apply (simp add: )
+    apply (metis add_diff_cancel_right' diff_ge_0_iff_ge le_add_diff_inverse pth_c(1))
+    done
+  then show ?thesis
+    apply (rule_tac a="a" in that)
+    using \<open>a \<in> S\<close>
+    apply (simp add: homotopic_with_def)
+    apply (rule_tac x="\<lambda>y. (1 - (fst y)) *\<^sub>R snd y + (fst y) *\<^sub>R a" in exI)
+    apply (intro conjI ballI continuous_on_compose continuous_intros)
+    apply (simp_all add: P)
+    done
+qed
+
+lemma starlike_imp_contractible:
+  fixes S :: "'a::real_normed_vector set"
+  shows "starlike S \<Longrightarrow> contractible S"
+using starlike_imp_contractible_gen contractible_def by (fastforce simp: id_def)
+
+lemma contractible_UNIV: "contractible (UNIV :: 'a::real_normed_vector set)"
+  by (simp add: starlike_imp_contractible)
+
+lemma starlike_imp_simply_connected:
+  fixes S :: "'a::real_normed_vector set"
+  shows "starlike S \<Longrightarrow> simply_connected S"
+by (simp add: contractible_imp_simply_connected starlike_imp_contractible)
+
+lemma convex_imp_simply_connected:
+  fixes S :: "'a::real_normed_vector set"
+  shows "convex S \<Longrightarrow> simply_connected S"
+using convex_imp_starlike starlike_imp_simply_connected by blast
+
+lemma starlike_imp_path_connected:
+  fixes S :: "'a::real_normed_vector set"
+  shows "starlike S \<Longrightarrow> path_connected S"
+by (simp add: simply_connected_imp_path_connected starlike_imp_simply_connected)
+
+lemma starlike_imp_connected:
+  fixes S :: "'a::real_normed_vector set"
+  shows "starlike S \<Longrightarrow> connected S"
+by (simp add: path_connected_imp_connected starlike_imp_path_connected)
+
+lemma is_interval_simply_connected_1:
+  fixes S :: "real set"
+  shows "is_interval S \<longleftrightarrow> simply_connected S"
+using convex_imp_simply_connected is_interval_convex_1 is_interval_path_connected_1 simply_connected_imp_path_connected by auto
+
+lemma contractible_empty: "contractible {}"
+  by (simp add: continuous_on_empty contractible_def homotopic_with)
+
+lemma contractible_convex_tweak_boundary_points:
+  fixes S :: "'a::euclidean_space set"
+  assumes "convex S" and TS: "rel_interior S \<subseteq> T" "T \<subseteq> closure S"
+  shows "contractible T"
+proof (cases "S = {}")
+  case True
+  with assms show ?thesis
+    by (simp add: contractible_empty subsetCE)
+next
+  case False
+  show ?thesis
+    apply (rule starlike_imp_contractible)
+    apply (rule starlike_convex_tweak_boundary_points [OF \<open>convex S\<close> False TS])
+    done
+qed
+
+lemma convex_imp_contractible:
+  fixes S :: "'a::real_normed_vector set"
+  shows "convex S \<Longrightarrow> contractible S"
+using contractible_empty convex_imp_starlike starlike_imp_contractible by auto
+
+lemma contractible_sing:
+  fixes a :: "'a::real_normed_vector"
+  shows "contractible {a}"
+by (rule convex_imp_contractible [OF convex_singleton])
+
+lemma is_interval_contractible_1:
+  fixes S :: "real set"
+  shows  "is_interval S \<longleftrightarrow> contractible S"
+using contractible_imp_simply_connected convex_imp_contractible is_interval_convex_1 
+      is_interval_simply_connected_1 by auto
+
+lemma contractible_times:
+  fixes S :: "'a::euclidean_space set" and T :: "'b::euclidean_space set"
+  assumes S: "contractible S" and T: "contractible T"
+  shows "contractible (S \<times> T)"
+proof -
+  obtain a h where conth: "continuous_on ({0..1} \<times> S) h" 
+             and hsub: "h ` ({0..1} \<times> S) \<subseteq> S"
+             and [simp]: "\<And>x. x \<in> S \<Longrightarrow> h (0, x) = x" 
+             and [simp]: "\<And>x. x \<in> S \<Longrightarrow>  h (1::real, x) = a"
+    using S by (auto simp add: contractible_def homotopic_with)
+  obtain b k where contk: "continuous_on ({0..1} \<times> T) k" 
+             and ksub: "k ` ({0..1} \<times> T) \<subseteq> T"
+             and [simp]: "\<And>x. x \<in> T \<Longrightarrow> k (0, x) = x" 
+             and [simp]: "\<And>x. x \<in> T \<Longrightarrow>  k (1::real, x) = b"
+    using T by (auto simp add: contractible_def homotopic_with)
+  show ?thesis
+    apply (simp add: contractible_def homotopic_with)
+    apply (rule exI [where x=a])
+    apply (rule exI [where x=b])
+    apply (rule exI [where x = "\<lambda>z. (h (fst z, fst(snd z)), k (fst z, snd(snd z)))"])
+    apply (intro conjI ballI continuous_intros continuous_on_compose2 [OF conth] continuous_on_compose2 [OF contk])
+    using hsub ksub 
+    apply (auto simp: )
+    done
+qed
+
+lemma homotopy_dominated_contractibility: 
+  fixes S :: "'a::real_normed_vector set" and T :: "'b::real_normed_vector set"
+  assumes S: "contractible S"
+      and f: "continuous_on S f" "image f S \<subseteq> T" 
+      and g: "continuous_on T g" "image g T \<subseteq> S" 
+      and hom: "homotopic_with (\<lambda>x. True) T T (f o g) id"
+    shows "contractible T"
+proof -
+  obtain b where "homotopic_with (\<lambda>h. True) S T f (\<lambda>x. b)"
+    using nullhomotopic_from_contractible [OF f S] .
+  then have homg: "homotopic_with (\<lambda>x. True) T T ((\<lambda>x. b) \<circ> g) (f \<circ> g)"
+    by (rule homotopic_with_compose_continuous_right [OF homotopic_with_symD g])
+  show ?thesis
+    apply (simp add: contractible_def)
+    apply (rule exI [where x = b])
+    apply (rule homotopic_with_symD)
+    apply (rule homotopic_with_trans [OF _ hom])
+    using homg apply (simp add: o_def)
+    done
+qed
 
 end

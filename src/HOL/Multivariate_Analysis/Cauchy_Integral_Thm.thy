@@ -6,6 +6,38 @@ theory Cauchy_Integral_Thm
 imports Complex_Transcendental Weierstrass Ordered_Euclidean_Space
 begin
 
+subsection\<open>Homeomorphisms of arc images\<close>
+
+lemma homeomorphism_arc:
+  fixes g :: "real \<Rightarrow> 'a::t2_space"
+  assumes "arc g"
+  obtains h where "homeomorphism {0..1} (path_image g) g h"
+using assms by (force simp add: arc_def homeomorphism_compact path_def path_image_def)
+
+lemma homeomorphic_arc_image_interval:
+  fixes g :: "real \<Rightarrow> 'a::t2_space" and a::real
+  assumes "arc g" "a < b"
+  shows "(path_image g) homeomorphic {a..b}"
+proof -
+  have "(path_image g) homeomorphic {0..1::real}"
+    by (meson assms(1) homeomorphic_def homeomorphic_sym homeomorphism_arc)
+  also have "... homeomorphic {a..b}"
+    using assms by (force intro: homeomorphic_closed_intervals_real)
+  finally show ?thesis .
+qed
+
+lemma homeomorphic_arc_images:
+  fixes g :: "real \<Rightarrow> 'a::t2_space" and h :: "real \<Rightarrow> 'b::t2_space"
+  assumes "arc g" "arc h"
+  shows "(path_image g) homeomorphic (path_image h)"
+proof -
+  have "(path_image g) homeomorphic {0..1::real}"
+    by (meson assms homeomorphic_def homeomorphic_sym homeomorphism_arc)
+  also have "... homeomorphic (path_image h)"
+    by (meson assms homeomorphic_def homeomorphism_arc)
+  finally show ?thesis .
+qed
+
 subsection \<open>Piecewise differentiable functions\<close>
 
 definition piecewise_differentiable_on
@@ -568,7 +600,7 @@ lemma closed_valid_path_image: "valid_path g \<Longrightarrow> closed(path_image
   by (metis closed_path_image valid_path_imp_path)
 
 proposition valid_path_compose:
-  assumes "valid_path g" 
+  assumes "valid_path g"
       and der: "\<And>x. x \<in> path_image g \<Longrightarrow> \<exists>f'. (f has_field_derivative f') (at x)"
       and con: "continuous_on (path_image g) (deriv f)"
     shows "valid_path (f o g)"
@@ -577,7 +609,7 @@ proof -
     using `valid_path g` unfolding valid_path_def piecewise_C1_differentiable_on_def by auto
   have "f \<circ> g differentiable at t" when "t\<in>{0..1} - s" for t
     proof (rule differentiable_chain_at)
-      show "g differentiable at t" using `valid_path g` 
+      show "g differentiable at t" using `valid_path g`
         by (meson C1_differentiable_on_eq \<open>g C1_differentiable_on {0..1} - s\<close> that)
     next
       have "g t\<in>path_image g" using that DiffD1 image_eqI path_image_def by metis
@@ -593,11 +625,11 @@ proof -
       show "continuous_on ({0..1} - s) (\<lambda>x. vector_derivative g (at x))"
         using g_diff C1_differentiable_on_eq by auto
     next
-      have "continuous_on {0..1} (\<lambda>x. deriv f (g x))" 
-        using continuous_on_compose[OF _ con[unfolded path_image_def],unfolded comp_def] 
-          `valid_path g` piecewise_C1_differentiable_on_def valid_path_def 
+      have "continuous_on {0..1} (\<lambda>x. deriv f (g x))"
+        using continuous_on_compose[OF _ con[unfolded path_image_def],unfolded comp_def]
+          `valid_path g` piecewise_C1_differentiable_on_def valid_path_def
         by blast
-      then show "continuous_on ({0..1} - s) (\<lambda>x. deriv f (g x))" 
+      then show "continuous_on ({0..1} - s) (\<lambda>x. deriv f (g x))"
         using continuous_on_subset by blast
     next
       show "vector_derivative g (at t) * deriv f (g t) = vector_derivative (f \<circ> g) (at t)"
@@ -613,11 +645,11 @@ proof -
     qed
   ultimately have "f o g C1_differentiable_on {0..1} - s"
     using C1_differentiable_on_eq by blast
-  moreover have "path (f o g)" 
+  moreover have "path (f o g)"
     proof -
-      have "isCont f x" when "x\<in>path_image g" for x 
+      have "isCont f x" when "x\<in>path_image g" for x
         proof -
-          obtain f' where "(f has_field_derivative f') (at x)" 
+          obtain f' where "(f has_field_derivative f') (at x)"
             using der[rule_format] `x\<in>path_image g` by auto
           thus ?thesis using DERIV_isCont by auto
         qed
@@ -1175,12 +1207,6 @@ lemma Re_linepath: "Re(linepath (of_real a) (of_real b) x) = (1 - x)*a + x*b"
 lemma Im_linepath: "Im(linepath (of_real a) (of_real b) x) = 0"
   by (simp add: linepath_def)
 
-lemma linepath_of_real: "(linepath (of_real a) (of_real b) x) = of_real ((1 - x)*a + x*b)"
-  by (simp add: scaleR_conv_of_real linepath_def)
-
-lemma of_real_linepath: "of_real (linepath a b x) = linepath (of_real a) (of_real b) x"
-  by (metis linepath_of_real mult.right_neutral of_real_def real_scaleR_def)
-
 lemma has_contour_integral_trivial [iff]: "(f has_contour_integral 0) (linepath a a)"
   by (simp add: has_contour_integral_linepath)
 
@@ -1349,42 +1375,6 @@ qed
 lemma contour_integral_integral:
      "contour_integral g f = integral {0..1} (\<lambda>x. f (g x) * vector_derivative g (at x))"
   by (simp add: contour_integral_def integral_def has_contour_integral contour_integrable_on)
-
-
-subsection\<open>Segments via convex hulls\<close>
-
-lemma segments_subset_convex_hull:
-    "closed_segment a b \<subseteq> (convex hull {a,b,c})"
-    "closed_segment a c \<subseteq> (convex hull {a,b,c})"
-    "closed_segment b c \<subseteq> (convex hull {a,b,c})"
-    "closed_segment b a \<subseteq> (convex hull {a,b,c})"
-    "closed_segment c a \<subseteq> (convex hull {a,b,c})"
-    "closed_segment c b \<subseteq> (convex hull {a,b,c})"
-by (auto simp: segment_convex_hull linepath_of_real  elim!: rev_subsetD [OF _ hull_mono])
-
-lemma midpoints_in_convex_hull:
-  assumes "x \<in> convex hull s" "y \<in> convex hull s"
-    shows "midpoint x y \<in> convex hull s"
-proof -
-  have "(1 - inverse(2)) *\<^sub>R x + inverse(2) *\<^sub>R y \<in> convex hull s"
-    apply (rule convexD_alt)
-    using assms
-    apply (auto simp: convex_convex_hull)
-    done
-  then show ?thesis
-    by (simp add: midpoint_def algebra_simps)
-qed
-
-lemma convex_hull_subset:
-    "s \<subseteq> convex hull t \<Longrightarrow> convex hull s \<subseteq> convex hull t"
-  by (simp add: convex_convex_hull subset_hull)
-
-lemma not_in_interior_convex_hull_3:
-  fixes a :: "complex"
-  shows "a \<notin> interior(convex hull {a,b,c})"
-        "b \<notin> interior(convex hull {a,b,c})"
-        "c \<notin> interior(convex hull {a,b,c})"
-  by (auto simp: card_insert_le_m1 not_in_interior_convex_hull)
 
 
 text\<open>Cauchy's theorem where there's a primitive\<close>
@@ -2246,7 +2236,8 @@ proof -
     have ?thesis
       using holomorphic_point_small_triangle [OF xin contf fx, of "e/10"] e
       apply clarsimp
-      apply (rule_tac x1="K/k" in exE [OF real_arch_pow2], blast)
+      apply (rule_tac y1="K/k" in exE [OF real_arch_pow[of 2]])
+      apply force+
       done
   }
   moreover have "f contour_integrable_on (linepath a b +++ linepath b c +++ linepath c a)"
@@ -3022,7 +3013,7 @@ proof -
     unfolding uniformly_continuous_on_def dist_norm real_norm_def
     by (metis divide_pos_pos enz zero_less_numeral)
   then obtain N::nat where N: "N>0" "inverse N < d"
-    using real_arch_inv [of d]   by auto
+    using real_arch_inverse [of d]   by auto
   { fix g h
     assume g: "valid_path g" and gp: "\<forall>t\<in>{0..1}. cmod (g t - p t) < e / 3"
        and h: "valid_path h" and hp: "\<forall>t\<in>{0..1}. cmod (h t - p t) < e / 3"
@@ -5742,11 +5733,11 @@ lemma valid_path_compose_holomorphic:
 proof (rule valid_path_compose[OF `valid_path g`])
   fix x assume "x \<in> path_image g"
   then show "\<exists>f'. (f has_field_derivative f') (at x)"
-    using holo holomorphic_on_open[OF `open s`] `path_image g \<subseteq> s` by auto 
+    using holo holomorphic_on_open[OF `open s`] `path_image g \<subseteq> s` by auto
 next
   have "deriv f holomorphic_on s"
     using holomorphic_deriv holo `open s` by auto
-  then show "continuous_on (path_image g) (deriv f)" 
+  then show "continuous_on (path_image g) (deriv f)"
     using assms(4) holomorphic_on_imp_continuous_on holomorphic_on_subset by auto
 qed
 
@@ -6295,7 +6286,13 @@ proof (rule ccontr)
   obtain B where B: "\<And>x. B \<le> cmod x \<Longrightarrow> norm (f x) * 2 < cmod (f z)"
     by (auto simp: dist_norm)
   def R \<equiv> "1 + \<bar>B\<bar> + norm z"
-  have "R > 0" unfolding R_def by (meson abs_add_one_gt_zero le_less_trans less_add_same_cancel2 norm_ge_zero)
+  have "R > 0" unfolding R_def 
+  proof -
+    have "0 \<le> cmod z + \<bar>B\<bar>"
+      by (metis (full_types) add_nonneg_nonneg norm_ge_zero real_norm_def)
+    then show "0 < 1 + \<bar>B\<bar> + cmod z"
+      by linarith
+  qed 
   have *: "((\<lambda>u. f u / (u - z)) has_contour_integral 2 * complex_of_real pi * \<i> * f z) (circlepath z R)"
     apply (rule Cauchy_integral_circlepath)
     using \<open>R > 0\<close> apply (auto intro: holomorphic_on_subset [OF holf] holomorphic_on_imp_continuous_on)+
