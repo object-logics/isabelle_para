@@ -36,6 +36,8 @@ object SHA1
     new Digest(result.toString)
   }
 
+  def fake(rep: String): Digest = new Digest(rep)
+
   def digest(file: JFile): Digest =
   {
     val stream = new FileInputStream(file)
@@ -54,6 +56,8 @@ object SHA1
     make_result(digest)
   }
 
+  def digest(path: Path): Digest = digest(path.file)
+
   def digest(bytes: Array[Byte]): Digest =
   {
     val digest = MessageDigest.getInstance("SHA")
@@ -63,9 +67,7 @@ object SHA1
   }
 
   def digest(bytes: Bytes): Digest = bytes.sha1_digest
-
   def digest(string: String): Digest = digest(Bytes(string))
 
-  def fake(rep: String): Digest = new Digest(rep)
+  val digest_length: Int = digest("").rep.length
 }
-

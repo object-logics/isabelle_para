@@ -10,7 +10,8 @@ package isabelle
 import java.io.{BufferedWriter, OutputStreamWriter, FileOutputStream, BufferedOutputStream,
   OutputStream, InputStream, FileInputStream, BufferedInputStream, BufferedReader,
   InputStreamReader, File => JFile, IOException}
-import java.nio.file.{StandardCopyOption, Path => JPath, Files, SimpleFileVisitor, FileVisitResult}
+import java.nio.file.{StandardOpenOption, StandardCopyOption, Path => JPath,
+  Files, SimpleFileVisitor, FileVisitResult}
 import java.nio.file.attribute.BasicFileAttributes
 import java.net.{URL, URLDecoder, MalformedURLException}
 import java.util.zip.{GZIPInputStream, GZIPOutputStream}
@@ -238,6 +239,15 @@ object File
   }
 
 
+  /* append */
+
+  def append(file: JFile, text: CharSequence): Unit =
+    Files.write(file.toPath, UTF8.bytes(text.toString),
+      StandardOpenOption.APPEND, StandardOpenOption.CREATE)
+
+  def append(path: Path, text: CharSequence): Unit = append(path.file, text)
+
+
   /* copy */
 
   def eq(file1: JFile, file2: JFile): Boolean =
@@ -254,14 +264,4 @@ object File
   }
 
   def copy(path1: Path, path2: Path): Unit = copy(path1.file, path2.file)
-
-
-  /* approximative time stamp */
-
-  def time_stamp(path: Path): Option[String] =
-  {
-    val file = path.file
-    if (file.isFile) Some(file.length.toString + " " + file.lastModified.toString)
-    else None
-  }
 }
