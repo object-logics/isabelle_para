@@ -88,6 +88,18 @@ lemma map_parametric:
   "((A ===> B) ===> (C ===> D) ===> (B ===> rel_option C) ===> A ===> rel_option D) 
      (\<lambda>f g m. (map_option g \<circ> m \<circ> f)) (\<lambda>f g m. (map_option g \<circ> m \<circ> f))"
   by transfer_prover
+  
+lemma combine_with_key_parametric: 
+  shows "((A ===> B ===> B ===> B) ===> (A ===> rel_option B) ===> (A ===> rel_option B) ===>
+           (A ===> rel_option B)) (\<lambda>f m1 m2 x. combine_options (f x) (m1 x) (m2 x))
+           (\<lambda>f m1 m2 x. combine_options (f x) (m1 x) (m2 x))"
+  unfolding combine_options_def by transfer_prover
+  
+lemma combine_parametric: 
+  shows "((B ===> B ===> B) ===> (A ===> rel_option B) ===> (A ===> rel_option B) ===>
+           (A ===> rel_option B)) (\<lambda>f m1 m2 x. combine_options f (m1 x) (m2 x))
+           (\<lambda>f m1 m2 x. combine_options f (m1 x) (m2 x))"
+  unfolding combine_options_def by transfer_prover
 
 end
 
@@ -106,6 +118,8 @@ lift_definition empty :: "('a, 'b) mapping"
 lift_definition lookup :: "('a, 'b) mapping \<Rightarrow> 'a \<Rightarrow> 'b option"
   is "\<lambda>m k. m k" parametric lookup_parametric .
 
+definition "lookup_default d m k = (case Mapping.lookup m k of None \<Rightarrow> d | Some v \<Rightarrow> v)"
+
 declare [[code drop: Mapping.lookup]]
 setup \<open>Code.add_default_eqn @{thm Mapping.lookup.abs_eq}\<close> \<comment> \<open>FIXME lifting\<close>
 
@@ -114,6 +128,9 @@ lift_definition update :: "'a \<Rightarrow> 'b \<Rightarrow> ('a, 'b) mapping \<
 
 lift_definition delete :: "'a \<Rightarrow> ('a, 'b) mapping \<Rightarrow> ('a, 'b) mapping"
   is "\<lambda>k m. m(k := None)" parametric delete_parametric .
+
+lift_definition filter :: "('a \<Rightarrow> 'b \<Rightarrow> bool) \<Rightarrow> ('a, 'b) mapping \<Rightarrow> ('a, 'b) mapping"
+  is "\<lambda>P m k. case m k of None \<Rightarrow> None | Some v \<Rightarrow> if P k v then Some v else None" . 
 
 lift_definition keys :: "('a, 'b) mapping \<Rightarrow> 'a set"
   is dom parametric dom_parametric .
@@ -126,6 +143,20 @@ lift_definition bulkload :: "'a list \<Rightarrow> (nat, 'a) mapping"
 
 lift_definition map :: "('c \<Rightarrow> 'a) \<Rightarrow> ('b \<Rightarrow> 'd) \<Rightarrow> ('a, 'b) mapping \<Rightarrow> ('c, 'd) mapping"
   is "\<lambda>f g m. (map_option g \<circ> m \<circ> f)" parametric map_parametric .
+  
+lift_definition map_values :: "('c \<Rightarrow> 'a \<Rightarrow> 'b) \<Rightarrow> ('c, 'a) mapping \<Rightarrow> ('c, 'b) mapping"
+  is "\<lambda>f m x. map_option (f x) (m x)" . 
+
+lift_definition combine_with_key :: 
+  "('a \<Rightarrow> 'b \<Rightarrow> 'b \<Rightarrow> 'b) \<Rightarrow> ('a,'b) mapping \<Rightarrow> ('a,'b) mapping \<Rightarrow> ('a,'b) mapping"
+  is "\<lambda>f m1 m2 x. combine_options (f x) (m1 x) (m2 x)" parametric combine_with_key_parametric .
+
+lift_definition combine :: 
+  "('b \<Rightarrow> 'b \<Rightarrow> 'b) \<Rightarrow> ('a,'b) mapping \<Rightarrow> ('a,'b) mapping \<Rightarrow> ('a,'b) mapping"
+  is "\<lambda>f m1 m2 x. combine_options f (m1 x) (m2 x)" parametric combine_parametric .
+
+definition All_mapping where
+  "All_mapping m P \<longleftrightarrow> (\<forall>x. case Mapping.lookup m x of None \<Rightarrow> True | Some y \<Rightarrow> P x y)"
 
 declare [[code drop: map]]
 
@@ -209,6 +240,32 @@ end
 
 subsection \<open>Properties\<close>
 
+lemma mapping_eqI:
+  "(\<And>x. lookup m x = lookup m' x) \<Longrightarrow> m = m'"
+  by transfer (simp add: fun_eq_iff)
+
+lemma mapping_eqI': 
+  assumes "\<And>x. x \<in> Mapping.keys m \<Longrightarrow> Mapping.lookup_default d m x = Mapping.lookup_default d m' x" 
+      and "Mapping.keys m = Mapping.keys m'"
+  shows   "m = m'"
+proof (intro mapping_eqI)
+  fix x
+  show "Mapping.lookup m x = Mapping.lookup m' x"
+  proof (cases "Mapping.lookup m x")
+    case None
+    hence "x \<notin> Mapping.keys m" by transfer (simp add: dom_def)
+    hence "x \<notin> Mapping.keys m'" by (simp add: assms)
+    hence "Mapping.lookup m' x = None" by transfer (simp add: dom_def)
+    with None show ?thesis by simp
+  next
+    case (Some y)
+    hence A: "x \<in> Mapping.keys m" by transfer (simp add: dom_def)
+    hence "x \<in> Mapping.keys m'" by (simp add: assms)
+    hence "\<exists>y'. Mapping.lookup m' x = Some y'" by transfer (simp add: dom_def)
+    with Some assms(1)[OF A] show ?thesis by (auto simp add: lookup_default_def)
+  qed
+qed
+
 lemma lookup_update:
   "lookup (update k v m) k = Some v" 
   by transfer simp
@@ -217,9 +274,124 @@ lemma lookup_update_neq:
   "k \<noteq> k' \<Longrightarrow> lookup (update k v m) k' = lookup m k'" 
   by transfer simp
 
+lemma lookup_update': 
+  "Mapping.lookup (update k v m) k' = (if k = k' then Some v else lookup m k')"
+  by (auto simp: lookup_update lookup_update_neq)
+
 lemma lookup_empty:
   "lookup empty k = None" 
   by transfer simp
+
+lemma lookup_filter:
+  "lookup (filter P m) k = 
+     (case lookup m k of None \<Rightarrow> None | Some v \<Rightarrow> if P k v then Some v else None)"
+  by transfer simp_all
+
+lemma lookup_map_values:
+  "lookup (map_values f m) k = map_option (f k) (lookup m k)"
+  by transfer simp_all
+
+lemma lookup_default_empty: "lookup_default d empty k = d"
+  by (simp add: lookup_default_def lookup_empty)
+
+lemma lookup_default_update:
+  "lookup_default d (update k v m) k = v" 
+  by (simp add: lookup_default_def lookup_update)
+
+lemma lookup_default_update_neq:
+  "k \<noteq> k' \<Longrightarrow> lookup_default d (update k v m) k' = lookup_default d m k'" 
+  by (simp add: lookup_default_def lookup_update_neq)
+
+lemma lookup_default_update': 
+  "lookup_default d (update k v m) k' = (if k = k' then v else lookup_default d m k')"
+  by (auto simp: lookup_default_update lookup_default_update_neq)
+
+lemma lookup_default_filter:
+  "lookup_default d (filter P m) k =  
+     (if P k (lookup_default d m k) then lookup_default d m k else d)"
+  by (simp add: lookup_default_def lookup_filter split: option.splits)
+
+lemma lookup_default_map_values:
+  "lookup_default (f k d) (map_values f m) k = f k (lookup_default d m k)"
+  by (simp add: lookup_default_def lookup_map_values split: option.splits)  
+
+lemma lookup_combine_with_key:
+  "Mapping.lookup (combine_with_key f m1 m2) x = 
+     combine_options (f x) (Mapping.lookup m1 x) (Mapping.lookup m2 x)"
+  by transfer (auto split: option.splits)
+  
+lemma combine_altdef: "combine f m1 m2 = combine_with_key (\<lambda>_. f) m1 m2"
+  by transfer' (rule refl)
+
+lemma lookup_combine:
+  "Mapping.lookup (combine f m1 m2) x = 
+     combine_options f (Mapping.lookup m1 x) (Mapping.lookup m2 x)"
+  by transfer (auto split: option.splits)
+  
+lemma lookup_default_neutral_combine_with_key: 
+  assumes "\<And>x. f k d x = x" "\<And>x. f k x d = x"
+  shows   "Mapping.lookup_default d (combine_with_key f m1 m2) k = 
+             f k (Mapping.lookup_default d m1 k) (Mapping.lookup_default d m2 k)"
+  by (auto simp: lookup_default_def lookup_combine_with_key assms split: option.splits)
+  
+lemma lookup_default_neutral_combine: 
+  assumes "\<And>x. f d x = x" "\<And>x. f x d = x"
+  shows   "Mapping.lookup_default d (combine f m1 m2) x = 
+             f (Mapping.lookup_default d m1 x) (Mapping.lookup_default d m2 x)"
+  by (auto simp: lookup_default_def lookup_combine assms split: option.splits)
+
+lemma lookup_map_entry:
+  "lookup (map_entry x f m) x = map_option f (lookup m x)"
+  by transfer (auto split: option.splits)
+
+lemma lookup_map_entry_neq:
+  "x \<noteq> y \<Longrightarrow> lookup (map_entry x f m) y = lookup m y"
+  by transfer (auto split: option.splits)
+
+lemma lookup_map_entry':
+  "lookup (map_entry x f m) y = 
+     (if x = y then map_option f (lookup m y) else lookup m y)"
+  by transfer (auto split: option.splits)
+  
+lemma lookup_default:
+  "lookup (default x d m) x = Some (lookup_default d m x)"
+    unfolding lookup_default_def default_def
+    by transfer (auto split: option.splits)
+
+lemma lookup_default_neq:
+  "x \<noteq> y \<Longrightarrow> lookup (default x d m) y = lookup m y"
+    unfolding lookup_default_def default_def
+    by transfer (auto split: option.splits)
+
+lemma lookup_default':
+  "lookup (default x d m) y = 
+     (if x = y then Some (lookup_default d m x) else lookup m y)"
+  unfolding lookup_default_def default_def
+  by transfer (auto split: option.splits)
+  
+lemma lookup_map_default:
+  "lookup (map_default x d f m) x = Some (f (lookup_default d m x))"
+    unfolding lookup_default_def default_def
+    by (simp add: map_default_def lookup_map_entry lookup_default lookup_default_def)
+
+lemma lookup_map_default_neq:
+  "x \<noteq> y \<Longrightarrow> lookup (map_default x d f m) y = lookup m y"
+    unfolding lookup_default_def default_def
+    by (simp add: map_default_def lookup_map_entry_neq lookup_default_neq) 
+
+lemma lookup_map_default':
+  "lookup (map_default x d f m) y = 
+     (if x = y then Some (f (lookup_default d m x)) else lookup m y)"
+    unfolding lookup_default_def default_def
+    by (simp add: map_default_def lookup_map_entry' lookup_default' lookup_default_def)  
+
+lemma lookup_tabulate: 
+  assumes "distinct xs"
+  shows   "Mapping.lookup (Mapping.tabulate xs f) x = (if x \<in> set xs then Some (f x) else None)"
+  using assms by transfer (auto simp: map_of_eq_None_iff o_def dest!: map_of_SomeD)
+
+lemma lookup_of_alist: "Mapping.lookup (Mapping.of_alist xs) k = map_of xs k"
+  by transfer simp_all
 
 lemma keys_is_none_rep [code_unfold]:
   "k \<in> keys m \<longleftrightarrow> \<not> (Option.is_none (lookup m k))"
@@ -247,6 +419,13 @@ lemma replace_update:
   "k \<notin> keys m \<Longrightarrow> replace k v m = m"
   "k \<in> keys m \<Longrightarrow> replace k v m = update k v m"
   by (transfer, auto simp add: replace_def fun_upd_twist)+
+  
+lemma map_values_update: "map_values f (update k v m) = update k (f k v) (map_values f m)"
+  by transfer (simp_all add: fun_eq_iff)
+  
+lemma size_mono:
+  "finite (keys m') \<Longrightarrow> keys m \<subseteq> keys m' \<Longrightarrow> size m \<le> size m'"
+  unfolding size_def by (auto intro: card_mono)
 
 lemma size_empty [simp]:
   "size empty = 0"
@@ -264,6 +443,13 @@ lemma size_delete:
 lemma size_tabulate [simp]:
   "size (tabulate ks f) = length (remdups ks)"
   unfolding size_def by transfer (auto simp add: map_of_map_restrict  card_set comp_def)
+
+lemma keys_filter: "keys (filter P m) \<subseteq> keys m"
+  by transfer (auto split: option.splits)
+
+lemma size_filter: "finite (keys m) \<Longrightarrow> size (filter P m) \<le> size m"
+  by (intro size_mono keys_filter)
+
 
 lemma bulkload_tabulate:
   "bulkload xs = tabulate [0..<length xs] (nth xs)"
@@ -292,6 +478,10 @@ lemma is_empty_default [simp]:
 lemma is_empty_map_entry [simp]:
   "is_empty (map_entry k f m) \<longleftrightarrow> is_empty m"
   unfolding is_empty_def by transfer (auto split: option.split)
+
+lemma is_empty_map_values [simp]:
+  "is_empty (map_values f m) \<longleftrightarrow> is_empty m"
+  unfolding is_empty_def by transfer (auto simp: fun_eq_iff)
 
 lemma is_empty_map_default [simp]:
   "\<not> is_empty (map_default k v f m)"
@@ -329,9 +519,23 @@ lemma keys_map_default [simp]:
   "keys (map_default k v f m) = insert k (keys m)"
   by (simp add: map_default_def)
 
+lemma keys_map_values [simp]:
+  "keys (map_values f m) = keys m"
+  by transfer (simp_all add: dom_def)
+
+lemma keys_combine_with_key [simp]: 
+  "Mapping.keys (combine_with_key f m1 m2) = Mapping.keys m1 \<union> Mapping.keys m2"
+  by transfer (auto simp: dom_def combine_options_def split: option.splits)  
+
+lemma keys_combine [simp]: "Mapping.keys (combine f m1 m2) = Mapping.keys m1 \<union> Mapping.keys m2"
+  by (simp add: combine_altdef)
+
 lemma keys_tabulate [simp]:
   "keys (tabulate ks f) = set ks"
   by transfer (simp add: map_of_map_restrict o_def)
+
+lemma keys_of_alist [simp]: "keys (of_alist xs) = set (List.map fst xs)"
+  by transfer (simp_all add: dom_map_of_conv_image_fst)
 
 lemma keys_bulkload [simp]:
   "keys (bulkload xs) = {0..<length xs}"
@@ -407,11 +611,91 @@ proof transfer
     by simp
 qed
 
+lemma All_mapping_mono:
+  "(\<And>k v. k \<in> keys m \<Longrightarrow> P k v \<Longrightarrow> Q k v) \<Longrightarrow> All_mapping m P \<Longrightarrow> All_mapping m Q"
+  unfolding All_mapping_def by transfer (auto simp: All_mapping_def dom_def split: option.splits)
 
+lemma All_mapping_empty [simp]: "All_mapping Mapping.empty P"
+  by (auto simp: All_mapping_def lookup_empty)
+  
+lemma All_mapping_update_iff: 
+  "All_mapping (Mapping.update k v m) P \<longleftrightarrow> P k v \<and> All_mapping m (\<lambda>k' v'. k = k' \<or> P k' v')"
+  unfolding All_mapping_def 
+proof safe
+  assume "\<forall>x. case Mapping.lookup (Mapping.update k v m) x of None \<Rightarrow> True | Some y \<Rightarrow> P x y"
+  hence A: "case Mapping.lookup (Mapping.update k v m) x of None \<Rightarrow> True | Some y \<Rightarrow> P x y" for x
+    by blast
+  from A[of k] show "P k v" by (simp add: lookup_update)
+  show "case Mapping.lookup m x of None \<Rightarrow> True | Some v' \<Rightarrow> k = x \<or> P x v'" for x
+    using A[of x] by (auto simp add: lookup_update' split: if_splits option.splits)
+next
+  assume "P k v"
+  assume "\<forall>x. case Mapping.lookup m x of None \<Rightarrow> True | Some v' \<Rightarrow> k = x \<or> P x v'"
+  hence A: "case Mapping.lookup m x of None \<Rightarrow> True | Some v' \<Rightarrow> k = x \<or> P x v'" for x by blast
+  show "case Mapping.lookup (Mapping.update k v m) x of None \<Rightarrow> True | Some xa \<Rightarrow> P x xa" for x
+    using \<open>P k v\<close> A[of x] by (auto simp: lookup_update' split: option.splits)
+qed
+
+lemma All_mapping_update:
+  "P k v \<Longrightarrow> All_mapping m (\<lambda>k' v'. k = k' \<or> P k' v') \<Longrightarrow> All_mapping (Mapping.update k v m) P"
+  by (simp add: All_mapping_update_iff)
+
+lemma All_mapping_filter_iff:
+  "All_mapping (filter P m) Q \<longleftrightarrow> All_mapping m (\<lambda>k v. P k v \<longrightarrow> Q k v)"
+  by (auto simp: All_mapping_def lookup_filter split: option.splits)
+
+lemma All_mapping_filter:
+  "All_mapping m Q \<Longrightarrow> All_mapping (filter P m) Q"
+  by (auto simp: All_mapping_filter_iff intro: All_mapping_mono)
+
+lemma All_mapping_map_values:
+  "All_mapping (map_values f m) P \<longleftrightarrow> All_mapping m (\<lambda>k v. P k (f k v))"
+  by (auto simp: All_mapping_def lookup_map_values split: option.splits)
+
+lemma All_mapping_tabulate: 
+  "(\<forall>x\<in>set xs. P x (f x)) \<Longrightarrow> All_mapping (Mapping.tabulate xs f) P"
+  unfolding All_mapping_def 
+  by (intro allI,  transfer) (auto split: option.split dest!: map_of_SomeD)
+
+lemma All_mapping_alist:
+  "(\<And>k v. (k, v) \<in> set xs \<Longrightarrow> P k v) \<Longrightarrow> All_mapping (Mapping.of_alist xs) P"
+  by (auto simp: All_mapping_def lookup_of_alist dest!: map_of_SomeD split: option.splits)
+
+
+lemma combine_empty [simp]:
+  "combine f Mapping.empty y = y" "combine f y Mapping.empty = y"
+  by (transfer, force)+
+
+lemma (in abel_semigroup) comm_monoid_set_combine: "comm_monoid_set (combine f) Mapping.empty"
+  by standard (transfer fixing: f, simp add: combine_options_ac[of f] ac_simps)+
+
+locale combine_mapping_abel_semigroup = abel_semigroup
+begin
+
+sublocale combine: comm_monoid_set "combine f" Mapping.empty
+  by (rule comm_monoid_set_combine)
+
+lemma fold_combine_code:
+  "combine.F g (set xs) = foldr (\<lambda>x. combine f (g x)) (remdups xs) Mapping.empty"
+proof -
+  have "combine.F g (set xs) = foldr (\<lambda>x. combine f (g x)) xs Mapping.empty"
+    if "distinct xs" for xs
+    using that by (induction xs) simp_all
+  from this[of "remdups xs"] show ?thesis by simp
+qed
+  
+lemma keys_fold_combine:
+  assumes "finite A"
+  shows   "Mapping.keys (combine.F g A) = (\<Union>x\<in>A. Mapping.keys (g x))"
+  using assms by (induction A rule: finite_induct) simp_all
+
+end
+
+  
 subsection \<open>Code generator setup\<close>
 
-hide_const (open) empty is_empty rep lookup update delete ordered_keys keys size
-  replace default map_entry map_default tabulate bulkload map of_alist
+hide_const (open) empty is_empty rep lookup lookup_default filter update delete ordered_keys
+  keys size replace default map_entry map_default tabulate bulkload map map_values combine of_alist
 
 end
 
