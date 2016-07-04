@@ -146,6 +146,15 @@ some situations where ambiguities may occur.
 
 *** HOL ***
 
+* Theory Library/Combinator_PER.thy: combinator to build partial
+equivalence relations from a predicate and an equivalence relation.
+
+* Theory Library/Perm.thy: basic facts about almost everywhere fix
+bijections.
+
+* Locale bijection establishes convenient default simp rules
+like "inv f (f a) = a" for total bijections.
+
 * Former locale lifting_syntax is now a bundle, which is easier to
 include in a local context or theorem statement, e.g. "context includes
 lifting_syntax begin ... end". Minor INCOMPATIBILITY.
