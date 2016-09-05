@@ -83,6 +83,16 @@ sig
   val register_fp_sugars_raw: fp_sugar list -> local_theory -> local_theory
   val register_fp_sugars: (string -> bool) -> fp_sugar list -> local_theory -> local_theory
 
+  val merge_type_args: BNF_Util.fp_kind -> ''a list * ''a list -> ''a list
+  val type_args_named_constrained_of_spec: (((('a * 'b) * 'c) * 'd) * 'e) * 'f -> 'a
+  val type_binding_of_spec: (((('a * 'b) * 'c) * 'd) * 'e) * 'f -> 'b
+  val mixfix_of_spec: ((('a * 'b) * 'c) * 'd) * 'e -> 'b
+  val mixfixed_ctr_specs_of_spec: (('a * 'b) * 'c) * 'd -> 'b
+  val map_binding_of_spec: ('a * ('b * 'c * 'd)) * 'e -> 'b
+  val rel_binding_of_spec: ('a * ('b * 'c * 'd)) * 'e -> 'c
+  val pred_binding_of_spec: ('a * ('b * 'c * 'd)) * 'e -> 'd
+  val sel_default_eqs_of_spec: 'a * 'b -> 'b
+
   val mk_parametricity_goal: Proof.context -> term list -> term -> term -> term
 
   val flat_corec_preds_predsss_gettersss: 'a list -> 'a list list list -> 'a list list list ->
@@ -170,6 +180,17 @@ sig
          * ((binding, binding * string) Ctr_Sugar.ctr_spec * mixfix) list)
         * (binding * binding * binding)) * string list) list ->
     Proof.context -> local_theory
+
+  val parse_ctr_arg: (binding * string) parser
+  val parse_ctr_specs: ((binding, binding * string) Ctr_Sugar.ctr_spec * mixfix) list parser
+  val parse_spec: ((((((binding option * (string * string option)) list * binding) * mixfix)
+      * ((binding, binding * string) Ctr_Sugar.ctr_spec * mixfix) list)
+    * (binding * binding * binding)) * string list) parser
+  val parse_co_datatype: (Ctr_Sugar.ctr_options_cmd
+        * ((((((binding option * (string * string option)) list * binding) * mixfix)
+      * ((binding, binding * string) Ctr_Sugar.ctr_spec * mixfix) list)
+    * (binding * binding * binding)) * string list) list) parser
+
   val parse_co_datatype_cmd: BNF_Util.fp_kind -> (mixfix list -> binding list -> binding list ->
       binding list -> binding list list -> binding list -> (string * sort) list ->
       typ list * typ list list -> BNF_Def.bnf list -> BNF_Comp.absT_info list -> local_theory ->
@@ -457,6 +478,23 @@ fun unflat xss = fold_map unfla xss;
 fun unflatt xsss = fold_map unflat xsss;
 fun unflattt xssss = fold_map unflatt xssss;
 
+fun cannot_merge_types fp =
+  error ("Mutually " ^ co_prefix fp ^ "recursive types must have the same type parameters");
+
+fun merge_type_arg fp T T' = if T = T' then T else cannot_merge_types fp;
+
+fun merge_type_args fp (As, As') =
+  if length As = length As' then map2 (merge_type_arg fp) As As' else cannot_merge_types fp;
+
+fun type_args_named_constrained_of_spec (((((ncAs, _), _), _), _), _) = ncAs;
+fun type_binding_of_spec (((((_, b), _), _), _), _) = b;
+fun mixfix_of_spec ((((_, mx), _), _), _) = mx;
+fun mixfixed_ctr_specs_of_spec (((_, mx_ctr_specs), _), _) = mx_ctr_specs;
+fun map_binding_of_spec ((_, (b, _, _)), _) = b;
+fun rel_binding_of_spec ((_, (_, b, _)), _) = b;
+fun pred_binding_of_spec ((_, (_, _, b)), _) = b;
+fun sel_default_eqs_of_spec (_, ts) = ts;
+
 fun ctr_sugar_kind_of_fp_kind Least_FP = Datatype
   | ctr_sugar_kind_of_fp_kind Greatest_FP = Codatatype;
 
@@ -530,23 +568,6 @@ fun liveness_of_fp_bnf n bnf =
   (case T_of_bnf bnf of
     Type (_, Ts) => map (not o member (op =) (deads_of_bnf bnf)) Ts
   | _ => replicate n false);
-
-fun cannot_merge_types fp =
-  error ("Mutually " ^ co_prefix fp ^ "recursive types must have the same type parameters");
-
-fun merge_type_arg fp T T' = if T = T' then T else cannot_merge_types fp;
-
-fun merge_type_args fp (As, As') =
-  if length As = length As' then map2 (merge_type_arg fp) As As' else cannot_merge_types fp;
-
-fun type_args_named_constrained_of_spec (((((ncAs, _), _), _), _), _) = ncAs;
-fun type_binding_of_spec (((((_, b), _), _), _), _) = b;
-fun mixfix_of_spec ((((_, mx), _), _), _) = mx;
-fun mixfixed_ctr_specs_of_spec (((_, mx_ctr_specs), _), _) = mx_ctr_specs;
-fun map_binding_of_spec ((_, (b, _, _)), _) = b;
-fun rel_binding_of_spec ((_, (_, b, _)), _) = b;
-fun pred_binding_of_spec ((_, (_, _, b)), _) = b;
-fun sel_default_eqs_of_spec (_, ts) = ts;
 
 fun add_nesting_bnf_names Us =
   let
@@ -2021,8 +2042,6 @@ fun derive_coinduct_corecs_thms_for_types pre_bnfs (x, cs, cpss, (((pgss, _, _, 
 fun define_co_datatypes prepare_plugins prepare_constraint prepare_typ prepare_term fp construct_fp
     ((raw_plugins, discs_sels0), specs) no_defs_lthy =
   let
-    (* TODO: sanity checks on arguments *)
-
     val plugins = prepare_plugins no_defs_lthy raw_plugins;
     val discs_sels = discs_sels0 orelse fp = Greatest_FP;
 
@@ -2741,8 +2760,8 @@ fun define_co_datatypes prepare_plugins prepare_constraint prepare_typ prepare_t
 fun co_datatypes x = define_co_datatypes (K I) (K I) (K I) (K I) x;
 
 fun co_datatype_cmd x =
-  define_co_datatypes Plugin_Name.make_filter Typedecl.read_constraint
-    Syntax.parse_typ Syntax.parse_term x;
+  define_co_datatypes Plugin_Name.make_filter Typedecl.read_constraint Syntax.parse_typ
+    Syntax.parse_term x;
 
 val parse_ctr_arg =
   @{keyword "("} |-- parse_binding_colon -- Parse.typ --| @{keyword ")"}
@@ -2757,6 +2776,7 @@ val parse_spec =
 
 val parse_co_datatype = parse_ctr_options -- Parse.and_list1 parse_spec;
 
-fun parse_co_datatype_cmd fp construct_fp = parse_co_datatype >> co_datatype_cmd fp construct_fp;
+fun parse_co_datatype_cmd fp construct_fp =
+  parse_co_datatype >> co_datatype_cmd fp construct_fp;
 
 end;
