@@ -25,13 +25,12 @@ val nT = HOLogic.natT;
              @{thm of_nat_numeral},
              @{thm "of_nat_Suc"}, @{thm "of_nat_1"},
              @{thm "of_int_0"}, @{thm "of_nat_0"},
-             @{thm "divide_zero"}, 
+             @{thm "div_by_0"}, 
              @{thm "divide_divide_eq_left"}, @{thm "times_divide_eq_right"}, 
              @{thm "times_divide_eq_left"}, @{thm "divide_divide_eq_right"},
              @{thm uminus_add_conv_diff [symmetric]}, @{thm "minus_divide_left"}]
 val comp_ths = distinct Thm.eq_thm (ths @ comp_arith @ @{thms simp_thms});
 
-val mod_div_equality' = @{thm "mod_div_equality'"};
 val mod_add_eq = @{thm "mod_add_eq"} RS sym;
 
 fun prepare_for_mir q fm = 
@@ -75,12 +74,12 @@ fun mir_tac ctxt q =
                         addsimps [refl, mod_add_eq, 
                                   @{thm mod_self},
                                   @{thm div_0}, @{thm mod_0},
-                                  @{thm "div_by_1"}, @{thm "mod_by_1"}, @{thm "div_1"}, @{thm "mod_1"},
+                                  @{thm div_by_1}, @{thm mod_by_1}, @{thm div_by_Suc_0}, @{thm mod_by_Suc_0},
                                   @{thm "Suc_eq_plus1"}]
                         addsimps @{thms add.assoc add.commute add.left_commute}
                         addsimprocs [@{simproc cancel_div_mod_nat}, @{simproc cancel_div_mod_int}]
     val simpset0 = put_simpset HOL_basic_ss ctxt
-      addsimps [mod_div_equality', @{thm Suc_eq_plus1}]
+      addsimps @{thms minus_div_mult_eq_mod [symmetric] Suc_eq_plus1}
       addsimps comp_ths
       |> fold Splitter.add_split
           [@{thm "split_zdiv"}, @{thm "split_zmod"}, @{thm "split_div'"},

@@ -2419,7 +2419,7 @@ proof (induct p rule: iszlfm.induct)
     then have ldcp:"0 < l div c"
       by (simp add: div_self[OF cnz])
     have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
-    hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric]
+    hence cl:"c * (l div c) =l" using mult_div_mod_eq [where a="l" and b="c"]
       by simp
     hence "(real_of_int l * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e < (0::real)) =
           (real_of_int (c * (l div c)) * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e < 0)"
@@ -2437,7 +2437,7 @@ next
     then have ldcp:"0 < l div c"
       by (simp add: div_self[OF cnz])
     have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
-    hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric]
+    hence cl:"c * (l div c) =l" using mult_div_mod_eq [where a="l" and b="c"]
       by simp
     hence "(real_of_int l * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e \<le> (0::real)) =
           (real_of_int (c * (l div c)) * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e \<le> 0)"
@@ -2455,7 +2455,7 @@ next
     then have ldcp:"0 < l div c"
       by (simp add: div_self[OF cnz])
     have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
-    hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric]
+    hence cl:"c * (l div c) =l" using mult_div_mod_eq [where a="l" and b="c"]
       by simp
     hence "(real_of_int l * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e > (0::real)) =
           (real_of_int (c * (l div c)) * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e > 0)"
@@ -2473,7 +2473,7 @@ next
     then have ldcp:"0 < l div c"
       by (simp add: div_self[OF cnz])
     have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
-    hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric]
+    hence cl:"c * (l div c) =l" using mult_div_mod_eq [where a="l" and b="c"]
       by simp
     hence "(real_of_int l * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e \<ge> (0::real)) =
           (real_of_int (c * (l div c)) * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e \<ge> 0)"
@@ -2491,7 +2491,7 @@ next
     then have ldcp:"0 < l div c"
       by (simp add: div_self[OF cnz])
     have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
-    hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric]
+    hence cl:"c * (l div c) =l" using mult_div_mod_eq [where a="l" and b="c"]
       by simp
     hence "(real_of_int l * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e = (0::real)) =
           (real_of_int (c * (l div c)) * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e = 0)"
@@ -2509,7 +2509,7 @@ next
     then have ldcp:"0 < l div c"
       by (simp add: div_self[OF cnz])
     have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
-    hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric]
+    hence cl:"c * (l div c) =l" using mult_div_mod_eq [where a="l" and b="c"]
       by simp
     hence "(real_of_int l * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e \<noteq> (0::real)) =
           (real_of_int (c * (l div c)) * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e \<noteq> 0)"
@@ -2527,7 +2527,7 @@ next
     then have ldcp:"0 < l div c"
       by (simp add: div_self[OF cnz])
     have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
-    hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric]
+    hence cl:"c * (l div c) =l" using mult_div_mod_eq [where a="l" and b="c"]
       by simp
     hence "(\<exists> (k::int). real_of_int l * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e = (real_of_int (l div c) * real_of_int j) * real_of_int k) = (\<exists> (k::int). real_of_int (c * (l div c)) * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e = (real_of_int (l div c) * real_of_int j) * real_of_int k)"  by simp
     also have "\<dots> = (\<exists> (k::int). real_of_int (l div c) * (real_of_int c * real_of_int x + Inum (real_of_int x # bs) e - real_of_int j * real_of_int k) = real_of_int (l div c)*0)" by (simp add: algebra_simps)
@@ -2544,7 +2544,7 @@ next
     then have ldcp:"0 < l div c"
       by (simp add: div_self[OF cnz])
     have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
-    hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric]
+    hence cl:"c * (l div c) =l" using mult_div_mod_eq [where a="l" and b="c"]
       by simp
     hence "(\<exists> (k::int). real_of_int l * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e = (real_of_int (l div c) * real_of_int j) * real_of_int k) = (\<exists> (k::int). real_of_int (c * (l div c)) * real_of_int x + real_of_int (l div c) * Inum (real_of_int x # bs) e = (real_of_int (l div c) * real_of_int j) * real_of_int k)"  by simp
     also have "\<dots> = (\<exists> (k::int). real_of_int (l div c) * (real_of_int c * real_of_int x + Inum (real_of_int x # bs) e - real_of_int j * real_of_int k) = real_of_int (l div c)*0)" by (simp add: algebra_simps)
@@ -4412,7 +4412,7 @@ proof(induct p rule: \<upsilon>.induct)
     using numbound0_I[OF nb, where bs="bs" and b="?u" and b'="x"] by simp
   also have "\<dots> = (?n*(real_of_int c *(?t/?n)) + ?n*(?N x e) < 0)"
     by (simp only: pos_less_divide_eq[OF np, where a="real_of_int c *(?t/?n) + (?N x e)"
-      and b="0", simplified divide_zero_left]) (simp only: algebra_simps)
+      and b="0", simplified div_0]) (simp only: algebra_simps)
   also have "\<dots> = (real_of_int c *?t + ?n* (?N x e) < 0)"
     using np by simp
   finally show ?case using nbt nb by (simp add: algebra_simps)
@@ -4423,7 +4423,7 @@ next
     using numbound0_I[OF nb, where bs="bs" and b="?u" and b'="x"] by simp
   also have "\<dots> = (?n*(real_of_int c *(?t/?n)) + ?n*(?N x e) \<le> 0)"
     by (simp only: pos_le_divide_eq[OF np, where a="real_of_int c *(?t/?n) + (?N x e)"
-      and b="0", simplified divide_zero_left]) (simp only: algebra_simps)
+      and b="0", simplified div_0]) (simp only: algebra_simps)
   also have "\<dots> = (real_of_int c *?t + ?n* (?N x e) \<le> 0)"
     using np by simp
   finally show ?case using nbt nb by (simp add: algebra_simps)
@@ -4434,7 +4434,7 @@ next
     using numbound0_I[OF nb, where bs="bs" and b="?u" and b'="x"] by simp
   also have "\<dots> = (?n*(real_of_int c *(?t/?n)) + ?n*(?N x e) > 0)"
     by (simp only: pos_divide_less_eq[OF np, where a="real_of_int c *(?t/?n) + (?N x e)"
-      and b="0", simplified divide_zero_left]) (simp only: algebra_simps)
+      and b="0", simplified div_0]) (simp only: algebra_simps)
   also have "\<dots> = (real_of_int c *?t + ?n* (?N x e) > 0)"
     using np by simp
   finally show ?case using nbt nb by (simp add: algebra_simps)
@@ -4445,7 +4445,7 @@ next
     using numbound0_I[OF nb, where bs="bs" and b="?u" and b'="x"] by simp
   also have "\<dots> = (?n*(real_of_int c *(?t/?n)) + ?n*(?N x e) \<ge> 0)"
     by (simp only: pos_divide_le_eq[OF np, where a="real_of_int c *(?t/?n) + (?N x e)"
-      and b="0", simplified divide_zero_left]) (simp only: algebra_simps)
+      and b="0", simplified div_0]) (simp only: algebra_simps)
   also have "\<dots> = (real_of_int c *?t + ?n* (?N x e) \<ge> 0)"
     using np by simp
   finally show ?case using nbt nb by (simp add: algebra_simps)
@@ -4457,7 +4457,7 @@ next
     using numbound0_I[OF nb, where bs="bs" and b="?u" and b'="x"] by simp
   also have "\<dots> = (?n*(real_of_int c *(?t/?n)) + ?n*(?N x e) = 0)"
     by (simp only: nonzero_eq_divide_eq[OF np, where a="real_of_int c *(?t/?n) + (?N x e)"
-      and b="0", simplified divide_zero_left]) (simp only: algebra_simps)
+      and b="0", simplified div_0]) (simp only: algebra_simps)
   also have "\<dots> = (real_of_int c *?t + ?n* (?N x e) = 0)"
     using np by simp
   finally show ?case using nbt nb by (simp add: algebra_simps)
@@ -4469,7 +4469,7 @@ next
     using numbound0_I[OF nb, where bs="bs" and b="?u" and b'="x"] by simp
   also have "\<dots> = (?n*(real_of_int c *(?t/?n)) + ?n*(?N x e) \<noteq> 0)"
     by (simp only: nonzero_eq_divide_eq[OF np, where a="real_of_int c *(?t/?n) + (?N x e)"
-      and b="0", simplified divide_zero_left]) (simp only: algebra_simps)
+      and b="0", simplified div_0]) (simp only: algebra_simps)
   also have "\<dots> = (real_of_int c *?t + ?n* (?N x e) \<noteq> 0)"
     using np by simp
   finally show ?case using nbt nb by (simp add: algebra_simps)

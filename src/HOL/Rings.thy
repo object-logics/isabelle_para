@@ -574,12 +574,12 @@ setup \<open>Sign.add_const_constraint (@{const_name "divide"}, SOME @{typ "'a::
 text \<open>Algebraic classes with division\<close>
   
 class semidom_divide = semidom + divide +
-  assumes nonzero_mult_divide_cancel_right [simp]: "b \<noteq> 0 \<Longrightarrow> (a * b) div b = a"
-  assumes divide_zero [simp]: "a div 0 = 0"
+  assumes nonzero_mult_div_cancel_right [simp]: "b \<noteq> 0 \<Longrightarrow> (a * b) div b = a"
+  assumes div_by_0 [simp]: "a div 0 = 0"
 begin
 
-lemma nonzero_mult_divide_cancel_left [simp]: "a \<noteq> 0 \<Longrightarrow> (a * b) div a = b"
-  using nonzero_mult_divide_cancel_right [of a b] by (simp add: ac_simps)
+lemma nonzero_mult_div_cancel_left [simp]: "a \<noteq> 0 \<Longrightarrow> (a * b) div a = b"
+  using nonzero_mult_div_cancel_right [of a b] by (simp add: ac_simps)
 
 subclass semiring_no_zero_divisors_cancel
 proof
@@ -603,21 +603,21 @@ proof
 qed
 
 lemma div_self [simp]: "a \<noteq> 0 \<Longrightarrow> a div a = 1"
-  using nonzero_mult_divide_cancel_left [of a 1] by simp
+  using nonzero_mult_div_cancel_left [of a 1] by simp
 
-lemma divide_zero_left [simp]: "0 div a = 0"
+lemma div_0 [simp]: "0 div a = 0"
 proof (cases "a = 0")
   case True
   then show ?thesis by simp
 next
   case False
   then have "a * 0 div a = 0"
-    by (rule nonzero_mult_divide_cancel_left)
+    by (rule nonzero_mult_div_cancel_left)
   then show ?thesis by simp
 qed
 
-lemma divide_1 [simp]: "a div 1 = a"
-  using nonzero_mult_divide_cancel_left [of 1 a] by simp
+lemma div_by_1 [simp]: "a div 1 = a"
+  using nonzero_mult_div_cancel_left [of 1 a] by simp
 
 end
 
@@ -952,7 +952,7 @@ lemmas unit_simps = mult_unit_dvd_iff div_unit_dvd_iff dvd_mult_unit_iff
   unit_mult_left_cancel unit_mult_right_cancel unit_div_cancel
   unit_eq_div1 unit_eq_div2
 
-lemma is_unit_divide_mult_cancel_left:
+lemma is_unit_div_mult_cancel_left:
   assumes "a \<noteq> 0" and "is_unit b"
   shows "a div (a * b) = 1 div b"
 proof -
@@ -961,10 +961,10 @@ proof -
   with assms show ?thesis by simp
 qed
 
-lemma is_unit_divide_mult_cancel_right:
+lemma is_unit_div_mult_cancel_right:
   assumes "a \<noteq> 0" and "is_unit b"
   shows "a div (b * a) = 1 div b"
-  using assms is_unit_divide_mult_cancel_left [of a b] by (simp add: ac_simps)
+  using assms is_unit_div_mult_cancel_left [of a b] by (simp add: ac_simps)
 
 end
 
@@ -1058,7 +1058,7 @@ proof (cases "a = 0")
 next
   case False
   then have "normalize a \<noteq> 0" by simp
-  with nonzero_mult_divide_cancel_right
+  with nonzero_mult_div_cancel_right
   have "unit_factor a * normalize a div normalize a = unit_factor a" by blast
   then show ?thesis by simp
 qed
@@ -1070,7 +1070,7 @@ proof (cases "a = 0")
 next
   case False
   then have "unit_factor a \<noteq> 0" by simp
-  with nonzero_mult_divide_cancel_left
+  with nonzero_mult_div_cancel_left
   have "unit_factor a * normalize a div unit_factor a = normalize a"
     by blast
   then show ?thesis by simp
@@ -1085,7 +1085,7 @@ next
   have "normalize a div a = normalize a div (unit_factor a * normalize a)"
     by simp
   also have "\<dots> = 1 div unit_factor a"
-    using False by (subst is_unit_divide_mult_cancel_right) simp_all
+    using False by (subst is_unit_div_mult_cancel_right) simp_all
   finally show ?thesis .
 qed
 
@@ -1290,7 +1290,7 @@ class modulo = dvd + divide +
 text \<open>Arbitrary quotient and remainder partitions\<close>
 
 class semiring_modulo = comm_semiring_1_cancel + divide + modulo +
-  assumes mod_div_equality: "a div b * b + a mod b = a"
+  assumes div_mult_mod_eq: "a div b * b + a mod b = a"
 begin
 
 lemma mod_div_decomp:
@@ -1298,35 +1298,35 @@ lemma mod_div_decomp:
   obtains q r where "q = a div b" and "r = a mod b"
     and "a = q * b + r"
 proof -
-  from mod_div_equality have "a = a div b * b + a mod b" by simp
+  from div_mult_mod_eq have "a = a div b * b + a mod b" by simp
   moreover have "a div b = a div b" ..
   moreover have "a mod b = a mod b" ..
   note that ultimately show thesis by blast
 qed
 
-lemma mod_div_equality2: "b * (a div b) + a mod b = a"
-  using mod_div_equality [of a b] by (simp add: ac_simps)
+lemma mult_div_mod_eq: "b * (a div b) + a mod b = a"
+  using div_mult_mod_eq [of a b] by (simp add: ac_simps)
 
-lemma mod_div_equality3: "a mod b + a div b * b = a"
-  using mod_div_equality [of a b] by (simp add: ac_simps)
+lemma mod_div_mult_eq: "a mod b + a div b * b = a"
+  using div_mult_mod_eq [of a b] by (simp add: ac_simps)
 
-lemma mod_div_equality4: "a mod b + b * (a div b) = a"
-  using mod_div_equality [of a b] by (simp add: ac_simps)
+lemma mod_mult_div_eq: "a mod b + b * (a div b) = a"
+  using div_mult_mod_eq [of a b] by (simp add: ac_simps)
 
-lemma minus_div_eq_mod: "a - a div b * b = a mod b"
-  by (rule add_implies_diff [symmetric]) (fact mod_div_equality3)
+lemma minus_div_mult_eq_mod: "a - a div b * b = a mod b"
+  by (rule add_implies_diff [symmetric]) (fact mod_div_mult_eq)
 
-lemma minus_div_eq_mod2: "a - b * (a div b) = a mod b"
-  by (rule add_implies_diff [symmetric]) (fact mod_div_equality4)
+lemma minus_mult_div_eq_mod: "a - b * (a div b) = a mod b"
+  by (rule add_implies_diff [symmetric]) (fact mod_mult_div_eq)
 
-lemma minus_mod_eq_div: "a - a mod b = a div b * b"
-  by (rule add_implies_diff [symmetric]) (fact mod_div_equality)
+lemma minus_mod_eq_div_mult: "a - a mod b = a div b * b"
+  by (rule add_implies_diff [symmetric]) (fact div_mult_mod_eq)
 
-lemma minus_mod_eq_div2: "a - a mod b = b * (a div b)"
-  by (rule add_implies_diff [symmetric]) (fact mod_div_equality2)
+lemma minus_mod_eq_mult_div: "a - a mod b = b * (a div b)"
+  by (rule add_implies_diff [symmetric]) (fact mult_div_mod_eq)
 
 end
-  
+
 
 class ordered_semiring = semiring + ordered_comm_monoid_add +
   assumes mult_left_mono: "a \<le> b \<Longrightarrow> 0 \<le> c \<Longrightarrow> c * a \<le> c * b"
@@ -1906,7 +1906,7 @@ lemma sgn_pos [simp]: "0 < a \<Longrightarrow> sgn a = 1"
 lemma sgn_neg [simp]: "a < 0 \<Longrightarrow> sgn a = - 1"
   by (simp only: sgn_1_neg)
 
-lemma sgn_times: "sgn (a * b) = sgn a * sgn b"
+lemma sgn_mult: "sgn (a * b) = sgn a * sgn b"
   by (auto simp add: sgn_if zero_less_mult_iff)
 
 lemma abs_sgn: "\<bar>k\<bar> = k * sgn k"
@@ -1917,6 +1917,10 @@ lemma sgn_greater [simp]: "0 < sgn a \<longleftrightarrow> 0 < a"
 
 lemma sgn_less [simp]: "sgn a < 0 \<longleftrightarrow> a < 0"
   unfolding sgn_if by auto
+
+lemma abs_sgn_eq_1 [simp]:
+  "a \<noteq> 0 \<Longrightarrow> \<bar>sgn a\<bar> = 1"
+  by (simp add: abs_if)
 
 lemma abs_sgn_eq: "\<bar>sgn a\<bar> = (if a = 0 then 0 else 1)"
   by (simp add: sgn_if)

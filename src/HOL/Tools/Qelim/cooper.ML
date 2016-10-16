@@ -829,13 +829,13 @@ val div_mod_ss =
        @{thm "mod_add_left_eq"}, @{thm "mod_add_right_eq"}, 
        @{thm "mod_add_eq"}, @{thm "div_add1_eq"}, @{thm "zdiv_zadd1_eq"}]
     @ [@{thm "mod_self"}, @{thm "mod_by_0"}, @{thm "div_by_0"},
-       @{thm "div_0"}, @{thm "mod_0"}, @{thm "div_by_1"}, @{thm "mod_by_1"}, @{thm "div_1"}, 
-       @{thm "mod_1"}, @{thm "Suc_eq_plus1"}]
+       @{thm "div_0"}, @{thm "mod_0"}, @{thm "div_by_1"}, @{thm "mod_by_1"},
+       @{thm "div_by_Suc_0"}, @{thm "mod_by_Suc_0"}, @{thm "Suc_eq_plus1"}]
     @ @{thms ac_simps}
    addsimprocs [@{simproc cancel_div_mod_nat}, @{simproc cancel_div_mod_int}])
 val splits_ss =
   simpset_of (put_simpset comp_ss @{context}
-    addsimps [@{thm "mod_div_equality'"}]
+    addsimps [@{thm minus_div_mult_eq_mod [symmetric]}]
     |> fold Splitter.add_split
       [@{thm "split_zdiv"}, @{thm "split_zmod"}, @{thm "split_div'"}, 
        @{thm "split_min"}, @{thm "split_max"}, @{thm "abs_split"}])

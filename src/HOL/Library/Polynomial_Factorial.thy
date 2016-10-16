@@ -331,7 +331,7 @@ proof (cases "c = 0")
   from assms obtain q where p: "p = [:c:] * q" by (erule dvdE)
   moreover {
     have "smult c q = [:c:] * q" by simp
-    also have "\<dots> div [:c:] = q" by (rule nonzero_mult_divide_cancel_left) (insert False, auto)
+    also have "\<dots> div [:c:] = q" by (rule nonzero_mult_div_cancel_left) (insert False, auto)
     finally have "smult c q div [:c:] = q" .
   }
   ultimately show ?thesis by (intro poly_eqI) (auto simp: coeff_map_poly False)
@@ -1038,7 +1038,7 @@ next
   thus "is_unit (unit_factor_field_poly p)"
     by (simp add: unit_factor_field_poly_def lead_coeff_nonzero is_unit_pCons_iff)
 qed (auto simp: unit_factor_field_poly_def normalize_field_poly_def lead_coeff_mult 
-       euclidean_size_field_poly_def Rings.mod_div_equality intro!: degree_mod_less' degree_mult_right_le)
+       euclidean_size_field_poly_def Rings.div_mult_mod_eq intro!: degree_mod_less' degree_mult_right_le)
 
 lemma field_poly_irreducible_imp_prime:
   assumes "irreducible (p :: 'a :: field poly)"
@@ -1356,7 +1356,7 @@ definition euclidean_size_poly :: "'a poly \<Rightarrow> nat" where
   "euclidean_size_poly p = (if p = 0 then 0 else 2 ^ degree p)"
 
 instance 
-  by standard (auto simp: euclidean_size_poly_def Rings.mod_div_equality intro!: degree_mod_less' degree_mult_right_le)
+  by standard (auto simp: euclidean_size_poly_def Rings.div_mult_mod_eq intro!: degree_mod_less' degree_mult_right_le)
 end
 
 

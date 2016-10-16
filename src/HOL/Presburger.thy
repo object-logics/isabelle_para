@@ -186,7 +186,7 @@ lemma periodic_finite_ex:
 proof
   assume ?LHS
   then obtain x where P: "P x" ..
-  have "x mod d = x - (x div d)*d" by(simp add:zmod_zdiv_equality ac_simps eq_diff_eq)
+  have "x mod d = x - (x div d)*d" by(simp add:mult_div_mod_eq [symmetric] ac_simps eq_diff_eq)
   hence Pmod: "P x = P(x mod d)" using modd by simp
   show ?RHS
   proof (cases)
@@ -411,7 +411,7 @@ method_setup presburger = \<open>
 \<close> "Cooper's algorithm for Presburger arithmetic"
 
 declare dvd_eq_mod_eq_0 [symmetric, presburger]
-declare mod_1 [presburger] 
+declare mod_by_Suc_0 [presburger] 
 declare mod_0 [presburger]
 declare mod_by_1 [presburger]
 declare mod_self [presburger]
@@ -420,8 +420,8 @@ declare mod_by_0 [presburger]
 declare mod_div_trivial [presburger]
 declare div_mod_equality2 [presburger]
 declare div_mod_equality [presburger]
-declare mod_div_equality2 [presburger]
-declare mod_div_equality [presburger]
+declare mult_div_mod_eq [presburger]
+declare div_mult_mod_eq [presburger]
 declare mod_mult_self1 [presburger]
 declare mod_mult_self2 [presburger]
 declare mod2_Suc_Suc[presburger]

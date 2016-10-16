@@ -356,7 +356,7 @@ proof -
   then have "gcd a b * lcm a b div lcm a b = normalize (a * b) div lcm a b"
     by (simp_all add: normalize_mult)
   with \<open>lcm a b \<noteq> 0\<close> show ?thesis
-    using nonzero_mult_divide_cancel_right [of "lcm a b" "gcd a b"] by simp
+    using nonzero_mult_div_cancel_right [of "lcm a b" "gcd a b"] by simp
 qed
 
 lemma lcm_1_left [simp]: "lcm 1 a = normalize a"
@@ -1920,7 +1920,7 @@ next
     apply (simp add: bezw_non_0 gcd_non_0_nat)
     apply (erule subst)
     apply (simp add: field_simps)
-    apply (subst mod_div_equality [of m n, symmetric])
+    apply (subst div_mult_mod_eq [of m n, symmetric])
       (* applying simp here undoes the last substitution! what is procedure cancel_div_mod? *)
     apply (simp only: NO_MATCH_def field_simps of_nat_add of_nat_mult)
     done

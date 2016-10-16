@@ -590,7 +590,7 @@ qualified lemma compute_float_minus[code]: "f - g = f + (-g)" for f g :: float
 
 qualified lemma compute_float_sgn[code]:
   "sgn (Float m1 e1) = (if 0 < m1 then 1 else if m1 < 0 then -1 else 0)"
-  by transfer (simp add: sgn_times)
+  by transfer (simp add: sgn_mult)
 
 lift_definition is_float_pos :: "float \<Rightarrow> bool" is "op < 0 :: real \<Rightarrow> bool" .
 
@@ -1816,7 +1816,7 @@ lemma mult_div_le:
   assumes "b > 0"
   shows "a \<ge> b * (a div b)"
 proof -
-  from zmod_zdiv_equality'[of a b] have "a = b * (a div b) + a mod b"
+  from minus_div_mult_eq_mod [symmetric, of a b] have "a = b * (a div b) + a mod b"
     by simp
   also have "\<dots> \<ge> b * (a div b) + 0"
     apply (rule add_left_mono)

@@ -26,31 +26,19 @@ proof
     using div_mult_self1 [of b 0 a] by (simp add: ac_simps div_0)
 qed (simp add: div_by_0)
 
-lemma div_by_1:
-  "a div 1 = a"
-  by (fact divide_1)
-
-lemma div_mult_self1_is_id:
-  "b \<noteq> 0 \<Longrightarrow> b * a div b = a"
-  by (fact nonzero_mult_divide_cancel_left)
-
-lemma div_mult_self2_is_id:
-  "b \<noteq> 0 \<Longrightarrow> a * b div b = a"
-  by (fact nonzero_mult_divide_cancel_right)
-
 text \<open>@{const divide} and @{const modulo}\<close>
 
 lemma div_mod_equality: "((a div b) * b + a mod b) + c = a + c"
-  by (simp add: mod_div_equality)
+  by (simp add: div_mult_mod_eq)
 
 lemma div_mod_equality2: "(b * (a div b) + a mod b) + c = a + c"
-  by (simp add: mod_div_equality2)
+  by (simp add: mult_div_mod_eq)
 
 lemma mod_by_0 [simp]: "a mod 0 = a"
-  using mod_div_equality [of a zero] by simp
+  using div_mult_mod_eq [of a zero] by simp
 
 lemma mod_0 [simp]: "0 mod a = 0"
-  using mod_div_equality [of zero a] div_0 by simp
+  using div_mult_mod_eq [of zero a] div_0 by simp
 
 lemma div_mult_self2 [simp]:
   assumes "b \<noteq> 0"
@@ -73,14 +61,14 @@ proof (cases "b = 0")
 next
   case False
   have "a + c * b = (a + c * b) div b * b + (a + c * b) mod b"
-    by (simp add: mod_div_equality)
+    by (simp add: div_mult_mod_eq)
   also from False div_mult_self1 [of b a c] have
     "\<dots> = (c + a div b) * b + (a + c * b) mod b"
       by (simp add: algebra_simps)
   finally have "a = a div b * b + (a + c * b) mod b"
     by (simp add: add.commute [of a] add.assoc distrib_right)
   then have "a div b * b + (a + c * b) mod b = a div b * b + a mod b"
-    by (simp add: mod_div_equality)
+    by (simp add: div_mult_mod_eq)
   then show ?thesis by simp
 qed
 
@@ -107,7 +95,7 @@ lemma mod_mult_self2_is_0 [simp]:
 lemma mod_by_1 [simp]:
   "a mod 1 = 0"
 proof -
-  from mod_div_equality [of a one] div_by_1 have "a + a mod 1 = a" by simp
+  from div_mult_mod_eq [of a one] div_by_1 have "a + a mod 1 = a" by simp
   then have "a + a mod 1 = a + 0" by simp
   then show ?thesis by (rule add_left_imp_eq)
 qed
@@ -150,7 +138,7 @@ proof
   then show "a mod b = 0" by simp
 next
   assume "a mod b = 0"
-  with mod_div_equality [of a b] have "a div b * b = a" by simp
+  with div_mult_mod_eq [of a b] have "a div b * b = a" by simp
   then have "a = b * (a div b)" by (simp add: ac_simps)
   then show "b dvd a" ..
 qed
@@ -169,7 +157,7 @@ next
   hence "a div b + a mod b div b = (a mod b + a div b * b) div b"
     by (rule div_mult_self1 [symmetric])
   also have "\<dots> = a div b"
-    by (simp only: mod_div_equality3)
+    by (simp only: mod_div_mult_eq)
   also have "\<dots> = a div b + 0"
     by simp
   finally show ?thesis
@@ -182,7 +170,7 @@ proof -
   have "a mod b mod b = (a mod b + a div b * b) mod b"
     by (simp only: mod_mult_self1)
   also have "\<dots> = a mod b"
-    by (simp only: mod_div_equality3)
+    by (simp only: mod_div_mult_eq)
   finally show ?thesis .
 qed
 
@@ -192,7 +180,7 @@ lemma dvd_mod_imp_dvd:
 proof -
   from assms have "k dvd (m div n) * n + m mod n"
     by (simp only: dvd_add dvd_mult)
-  then show ?thesis by (simp add: mod_div_equality)
+  then show ?thesis by (simp add: div_mult_mod_eq)
 qed
 
 text \<open>Addition respects modular equivalence.\<close>
@@ -201,7 +189,7 @@ lemma mod_add_left_eq: \<comment> \<open>FIXME reorient\<close>
   "(a + b) mod c = (a mod c + b) mod c"
 proof -
   have "(a + b) mod c = (a div c * c + a mod c + b) mod c"
-    by (simp only: mod_div_equality)
+    by (simp only: div_mult_mod_eq)
   also have "\<dots> = (a mod c + b + a div c * c) mod c"
     by (simp only: ac_simps)
   also have "\<dots> = (a mod c + b) mod c"
@@ -213,7 +201,7 @@ lemma mod_add_right_eq: \<comment> \<open>FIXME reorient\<close>
   "(a + b) mod c = (a + b mod c) mod c"
 proof -
   have "(a + b) mod c = (a + (b div c * c + b mod c)) mod c"
-    by (simp only: mod_div_equality)
+    by (simp only: div_mult_mod_eq)
   also have "\<dots> = (a + b mod c + b div c * c) mod c"
     by (simp only: ac_simps)
   also have "\<dots> = (a + b mod c) mod c"
@@ -242,7 +230,7 @@ lemma mod_mult_left_eq: \<comment> \<open>FIXME reorient\<close>
   "(a * b) mod c = ((a mod c) * b) mod c"
 proof -
   have "(a * b) mod c = ((a div c * c + a mod c) * b) mod c"
-    by (simp only: mod_div_equality)
+    by (simp only: div_mult_mod_eq)
   also have "\<dots> = (a mod c * b + a div c * b * c) mod c"
     by (simp only: algebra_simps)
   also have "\<dots> = (a mod c * b) mod c"
@@ -254,7 +242,7 @@ lemma mod_mult_right_eq: \<comment> \<open>FIXME reorient\<close>
   "(a * b) mod c = (a * (b mod c)) mod c"
 proof -
   have "(a * b) mod c = (a * (b div c * c + b mod c)) mod c"
-    by (simp only: mod_div_equality)
+    by (simp only: div_mult_mod_eq)
   also have "\<dots> = (a * (b mod c) + a * (b div c) * c) mod c"
     by (simp only: algebra_simps)
   also have "\<dots> = (a * (b mod c)) mod c"
@@ -299,7 +287,7 @@ proof -
   also have "\<dots> = (a div (c * k) * (c * k) + a mod (c * k)) mod c"
     by (simp only: ac_simps)
   also have "\<dots> = a mod c"
-    by (simp only: mod_div_equality)
+    by (simp only: div_mult_mod_eq)
   finally show ?thesis .
 qed
 
@@ -317,11 +305,11 @@ proof (cases "c = 0")
   case True then show ?thesis by simp
 next
   case False
-  from mod_div_equality
+  from div_mult_mod_eq
   have "((c * a) div (c * b)) * (c * b) + (c * a) mod (c * b) = c * a" .
   with False have "c * ((a div b) * b + a mod b) + (c * a) mod (c * b)
     = c * a + c * (a mod b)" by (simp add: algebra_simps)
-  with mod_div_equality show ?thesis by simp
+  with div_mult_mod_eq show ?thesis by simp
 qed
 
 lemma mod_mult_mult2:
@@ -369,7 +357,7 @@ text \<open>Negation respects modular equivalence.\<close>
 lemma mod_minus_eq: "(- a) mod b = (- (a mod b)) mod b"
 proof -
   have "(- a) mod b = (- (a div b * b + a mod b)) mod b"
-    by (simp only: mod_div_equality)
+    by (simp only: div_mult_mod_eq)
   also have "\<dots> = (- (a mod b) + - (a div b) * b) mod b"
     by (simp add: ac_simps)
   also have "\<dots> = (- (a mod b)) mod b"
@@ -412,7 +400,7 @@ apply (case_tac "y = 0") apply simp
 apply (auto simp add: dvd_def)
 apply (subgoal_tac "-(y * k) = y * - k")
  apply (simp only:)
- apply (erule div_mult_self1_is_id)
+ apply (erule nonzero_mult_div_cancel_left)
 apply simp
 done
 
@@ -420,7 +408,7 @@ lemma dvd_div_neg: "y dvd x \<Longrightarrow> x div -y = - (x div y)"
 apply (case_tac "y = 0") apply simp
 apply (auto simp add: dvd_def)
 apply (subgoal_tac "y * k = -y * -k")
- apply (erule ssubst, rule div_mult_self1_is_id)
+ apply (erule ssubst, rule nonzero_mult_div_cancel_left)
  apply simp
 apply simp
 done
@@ -479,7 +467,7 @@ proof (cases "2 = 0")
   case True then show ?thesis by simp
 next
   case False
-  from mod_div_equality have "1 div 2 * 2 + 1 mod 2 = 1" .
+  from div_mult_mod_eq have "1 div 2 * 2 + 1 mod 2 = 1" .
   with one_mod_two_eq_one have "1 div 2 * 2 + 1 = 1" by simp
   then have "1 div 2 * 2 = 0" by (simp add: ac_simps add_left_imp_eq del: mult_eq_0_iff)
   then have "1 div 2 = 0 \<or> 2 = 0" by simp
@@ -514,7 +502,7 @@ next
 next
   fix a
   assume "a mod 2 = 1"
-  then have "a = a div 2 * 2 + 1" using mod_div_equality [of a 2] by simp
+  then have "a = a div 2 * 2 + 1" using div_mult_mod_eq [of a 2] by simp
   then show "\<exists>b. a = b + 1" ..
 qed
 
@@ -540,7 +528,7 @@ lemma even_two_times_div_two:
 
 lemma odd_two_times_div_two_succ [simp]:
   "odd a \<Longrightarrow> 2 * (a div 2) + 1 = a"
-  using mod_div_equality2 [of 2 a] by (simp add: even_iff_mod_2_eq_zero)
+  using mult_div_mod_eq [of 2 a] by (simp add: even_iff_mod_2_eq_zero)
  
 end
 
@@ -576,17 +564,6 @@ class semiring_numeral_div = semiring_div + comm_semiring_1_cancel + linordered_
     yields a significant speedup.\<close>
 
 begin
-
-lemma mult_div_cancel:
-  "b * (a div b) = a - a mod b"
-proof -
-  have "b * (a div b) + a mod b = a"
-    using mod_div_equality [of a b] by (simp add: ac_simps)
-  then have "b * (a div b) + a mod b - a mod b = a - a mod b"
-    by simp
-  then show ?thesis
-    by simp
-qed
 
 subclass semiring_div_parity
 proof
@@ -629,7 +606,7 @@ proof -
     by (auto simp add: mod_w) (insert mod_less, auto)
   with mod_w have mod: "a mod (2 * b) = a mod b + b" by simp
   have "2 * (a div (2 * b)) = a div b - w"
-    by (simp add: w_def div_mult2_eq mult_div_cancel ac_simps)
+    by (simp add: w_def div_mult2_eq minus_mod_eq_mult_div ac_simps)
   with \<open>w = 1\<close> have div: "2 * (a div (2 * b)) = a div b - 1" by simp
   then show ?P and ?Q
     by (simp_all add: div mod add_implies_diff [symmetric])
@@ -654,7 +631,7 @@ proof -
   ultimately have "w = 0" by auto
   with mod_w have mod: "a mod (2 * b) = a mod b" by simp
   have "2 * (a div (2 * b)) = a div b - w"
-    by (simp add: w_def div_mult2_eq mult_div_cancel ac_simps)
+    by (simp add: w_def div_mult2_eq minus_mod_eq_mult_div ac_simps)
   with \<open>w = 0\<close> have div: "2 * (a div (2 * b)) = a div b" by simp
   then show ?P and ?Q
     by (simp_all add: div mod)
@@ -1119,7 +1096,7 @@ lemma mod_less_eq_dividend [simp]:
   fixes m n :: nat
   shows "m mod n \<le> m"
 proof (rule add_leD2)
-  from mod_div_equality have "m div n * n + m mod n = m" .
+  from div_mult_mod_eq have "m div n * n + m mod n = m" .
   then show "m div n * n + m mod n \<le> m" by auto
 qed
 
@@ -1129,12 +1106,8 @@ by (simp add: le_mod_geq linorder_not_less)
 lemma mod_if: "m mod (n::nat) = (if m < n then m else (m - n) mod n)"
 by (simp add: le_mod_geq)
 
-lemma mod_1 [simp]: "m mod Suc 0 = 0"
+lemma mod_by_Suc_0 [simp]: "m mod Suc 0 = 0"
 by (induct m) (simp_all add: mod_geq)
-
-(* a simple rearrangement of mod_div_equality: *)
-lemma mult_div_cancel: "(n::nat) * (m div n) = m - (m mod n)"
-  using mod_div_equality2 [of n m] by arith
 
 lemma mod_le_divisor[simp]: "0 < n \<Longrightarrow> m mod n \<le> (n::nat)"
   apply (drule mod_less_divisor [where m = m])
@@ -1208,7 +1181,7 @@ declare divmod_algorithm_code [where ?'a = nat, code]
 
 subsubsection \<open>Further Facts about Quotient and Remainder\<close>
 
-lemma div_1 [simp]:
+lemma div_by_Suc_0 [simp]:
   "m div Suc 0 = m"
   using div_by_1 [of m] by simp
 
@@ -1291,7 +1264,7 @@ lemma mod_eqD:
   assumes "m mod d = r"
   shows "\<exists>q. m = r + q * d"
 proof -
-  from mod_div_equality obtain q where "q * d + m mod d = m" by blast
+  from div_mult_mod_eq obtain q where "q * d + m mod d = m" by blast
   with assms have "m = r + q * d" by simp
   then show ?thesis ..
 qed
@@ -1341,7 +1314,7 @@ lemma split_div_lemma:
   shows "n * q \<le> m \<and> m < n * Suc q \<longleftrightarrow> q = ((m::nat) div n)" (is "?lhs \<longleftrightarrow> ?rhs")
 proof
   assume ?rhs
-  with mult_div_cancel have nq: "n * q = m - (m mod n)" by simp
+  with minus_mod_eq_mult_div [symmetric] have nq: "n * q = m - (m mod n)" by simp
   then have A: "n * q \<le> m" by simp
   have "n - (m mod n) > 0" using mod_less_divisor assms by auto
   then have "m < m + (n - (m mod n))" by simp
@@ -1398,13 +1371,6 @@ next
     show ?P by simp
   qed
 qed
-
-theorem mod_div_equality' [nitpick_unfold]: "(m::nat) mod n = m - (m div n) * n"
-  using mod_div_equality [of m n] by arith
-
-lemma div_mod_equality': "(m::nat) div n * n = m - m mod n"
-  using mod_div_equality [of m n] by arith
-(* FIXME: very similar to mult_div_cancel *)
 
 lemma div_eq_dividend_iff: "a \<noteq> 0 \<Longrightarrow> (a :: nat) div b = a \<longleftrightarrow> b = 1"
   apply rule
@@ -1817,14 +1783,11 @@ proof
     by (cases "0::int" k rule: linorder_cases) simp_all
   then show "is_unit (unit_factor k)"
     by simp
-qed (simp_all add: sgn_times mult_sgn_abs)
+qed (simp_all add: sgn_mult mult_sgn_abs)
   
 end
   
 text\<open>Basic laws about division and remainder\<close>
-
-lemma zmod_zdiv_equality: "(a::int) = b * (a div b) + (a mod b)"
-  by (fact mod_div_equality2 [symmetric])
 
 lemma zdiv_int: "int (a div b) = int a div int b"
   by (simp add: divide_int_def)
@@ -1949,16 +1912,18 @@ lemma zmod_zminus2_not_zero:
 subsubsection \<open>Monotonicity in the First Argument (Dividend)\<close>
 
 lemma zdiv_mono1: "[| a \<le> a';  0 < (b::int) |] ==> a div b \<le> a' div b"
-apply (cut_tac a = a and b = b in zmod_zdiv_equality)
-apply (cut_tac a = a' and b = b in zmod_zdiv_equality)
+using mult_div_mod_eq [symmetric, of a b]
+using mult_div_mod_eq [symmetric, of a' b]
+apply -
 apply (rule unique_quotient_lemma)
 apply (erule subst)
 apply (erule subst, simp_all)
 done
 
 lemma zdiv_mono1_neg: "[| a \<le> a';  (b::int) < 0 |] ==> a' div b \<le> a div b"
-apply (cut_tac a = a and b = b in zmod_zdiv_equality)
-apply (cut_tac a = a' and b = b in zmod_zdiv_equality)
+using mult_div_mod_eq [symmetric, of a b]
+using mult_div_mod_eq [symmetric, of a' b]
+apply -
 apply (rule unique_quotient_lemma_neg)
 apply (erule subst)
 apply (erule subst, simp_all)
@@ -1991,9 +1956,10 @@ done
 lemma zdiv_mono2:
      "[| (0::int) \<le> a;  0 < b';  b' \<le> b |] ==> a div b \<le> a div b'"
 apply (subgoal_tac "b \<noteq> 0")
- prefer 2 apply arith
-apply (cut_tac a = a and b = b in zmod_zdiv_equality)
-apply (cut_tac a = a and b = b' in zmod_zdiv_equality)
+  prefer 2 apply arith
+using mult_div_mod_eq [symmetric, of a b]
+using mult_div_mod_eq [symmetric, of a b']
+apply -
 apply (rule zdiv_mono2_lemma)
 apply (erule subst)
 apply (erule subst, simp_all)
@@ -2019,8 +1985,9 @@ done
 
 lemma zdiv_mono2_neg:
      "[| a < (0::int);  0 < b';  b' \<le> b |] ==> a div b' \<le> a div b"
-apply (cut_tac a = a and b = b in zmod_zdiv_equality)
-apply (cut_tac a = a and b = b' in zmod_zdiv_equality)
+using mult_div_mod_eq [symmetric, of a b]
+using mult_div_mod_eq [symmetric, of a b']
+apply -
 apply (rule zdiv_mono2_neg_lemma)
 apply (erule subst)
 apply (erule subst, simp_all)
@@ -2060,10 +2027,6 @@ by (simp add: dvd_eq_mod_eq_0 [symmetric] dvd_def)
 
 (* REVISIT: should this be generalized to all semiring_div types? *)
 lemmas zmod_eq_0D [dest!] = zmod_eq_0_iff [THEN iffD1]
-
-lemma zmod_zdiv_equality' [nitpick_unfold]:
-  "(m::int) mod n = m - (m div n) * n"
-  using mod_div_equality [of m n] by arith
 
 
 subsubsection \<open>Proving  @{term "a div (b * c) = (a div b) div c"}\<close>
@@ -2219,8 +2182,6 @@ lemma pos_divmod_int_rel_mult_2:
   shows "divmod_int_rel (1 + 2*a) (2*b) (q, 1 + 2*r)"
   using assms unfolding divmod_int_rel_def by auto
 
-declaration \<open>K (Lin_Arith.add_simps @{thms uminus_numeral_One})\<close>
-
 lemma neg_divmod_int_rel_mult_2:
   assumes "b \<le> 0"
   assumes "divmod_int_rel (a + 1) b (q, r)"
@@ -2296,7 +2257,7 @@ lemma zmod_trival_iff:
   shows "i mod k = i \<longleftrightarrow> k = 0 \<or> 0 \<le> i \<and> i < k \<or> i \<le> 0 \<and> k < i"
 proof -
   have "i mod k = i \<longleftrightarrow> i div k = 0"
-    by safe (insert mod_div_equality [of i k], auto)
+    by safe (insert div_mult_mod_eq [of i k], auto)
   with zdiv_eq_0_iff
   show ?thesis
     by simp
@@ -2368,11 +2329,6 @@ lemma zmod_le_nonneg_dividend: "(m::int) \<ge> 0 ==> m mod k \<le> m"
 apply (rule split_zmod[THEN iffD2])
 apply(fastforce dest: q_pos_lemma intro: split_mult_pos_le)
 done
-
-lemma zmult_div_cancel:
-  "(n::int) * (m div n) = m - (m mod n)"
-  using zmod_zdiv_equality [where a="m" and b="n"]
-  by (simp add: algebra_simps) (* FIXME: generalize *)
 
 
 subsubsection \<open>Computation of Division and Remainder\<close>
@@ -2708,5 +2664,9 @@ code_identifier
 lemma dvd_eq_mod_eq_0_numeral:
   "numeral x dvd (numeral y :: 'a) \<longleftrightarrow> numeral y mod numeral x = (0 :: 'a::semiring_div)"
   by (fact dvd_eq_mod_eq_0)
+
+declare minus_div_mult_eq_mod [symmetric, nitpick_unfold]
+
+hide_fact (open) div_0 div_by_0
 
 end

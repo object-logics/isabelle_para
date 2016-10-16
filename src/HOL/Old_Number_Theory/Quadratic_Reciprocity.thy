@@ -26,7 +26,7 @@ proof -
   also have "setsum (%x. x * a) A = setsum id B"
     by (simp add: B_def setsum.reindex [OF inj_on_xa_A])
   also have "... = setsum (%x. p * (x div p) + StandardRes p x) B"
-    by (auto simp add: StandardRes_def zmod_zdiv_equality)
+    by (auto simp add: StandardRes_def mult_div_mod_eq [symmetric])
   also have "... = setsum (%x. p * (x div p)) B + setsum (StandardRes p) B"
     by (rule setsum.distrib)
   also have "setsum (StandardRes p) B = setsum id C"
@@ -315,7 +315,7 @@ proof -
       by (rule zdiv_mono1) (insert p_g_2, auto)
     then show "b \<le> (q * a) div p"
       apply (subgoal_tac "p \<noteq> 0")
-      apply (frule div_mult_self1_is_id, force)
+      apply (frule nonzero_mult_div_cancel_left, force)
       apply (insert p_g_2, auto)
       done
   qed
@@ -349,7 +349,7 @@ proof -
       by (rule zdiv_mono1) (insert q_g_2, auto)
     then show "a \<le> (p * b) div q"
       apply (subgoal_tac "q \<noteq> 0")
-      apply (frule div_mult_self1_is_id, force)
+      apply (frule nonzero_mult_div_cancel_left, force)
       apply (insert q_g_2, auto)
       done
   qed

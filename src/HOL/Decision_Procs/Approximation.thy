@@ -2224,7 +2224,7 @@ lemma ln_add:
 proof -
   have "x \<noteq> 0" using assms by auto
   have "x + y = x * (1 + y / x)"
-    unfolding distrib_left times_divide_eq_right nonzero_mult_divide_cancel_left[OF \<open>x \<noteq> 0\<close>]
+    unfolding distrib_left times_divide_eq_right nonzero_mult_div_cancel_left[OF \<open>x \<noteq> 0\<close>]
     by auto
   moreover
   have "0 < y / x" using assms by auto
@@ -4408,7 +4408,7 @@ lemma approximation_preproc_int[approximation_preproc]:
   "i \<le> j \<longleftrightarrow> real_of_int i \<le> real_of_int j"
   "i < j \<longleftrightarrow> real_of_int i < real_of_int j"
   "i \<in> {j .. k} \<longleftrightarrow> real_of_int i \<in> {real_of_int j .. real_of_int k}"
-  by (simp_all add: floor_divide_of_int_eq zmod_zdiv_equality')
+  by (simp_all add: floor_divide_of_int_eq minus_div_mult_eq_mod [symmetric])
 
 lemma approximation_preproc_nat[approximation_preproc]:
   "real 0 = real_of_float 0"
@@ -4426,7 +4426,7 @@ lemma approximation_preproc_nat[approximation_preproc]:
   "n \<le> m \<longleftrightarrow> real n \<le> real m"
   "n < m \<longleftrightarrow> real n < real m"
   "n \<in> {m .. l} \<longleftrightarrow> real n \<in> {real m .. real l}"
-  by (simp_all add: real_div_nat_eq_floor_of_divide mod_div_equality')
+  by (simp_all add: real_div_nat_eq_floor_of_divide minus_div_mult_eq_mod [symmetric])
 
 ML_file "approximation.ML"
 
