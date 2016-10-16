@@ -51,13 +51,12 @@ method_setup algebra = \<open>
 \<close> "solve polynomial equations over (semi)rings and ideal membership problems using Groebner bases"
 
 declare dvd_def[algebra]
-declare dvd_eq_mod_eq_0[symmetric, algebra]
+declare mod_eq_0_iff_dvd[algebra]
 declare mod_div_trivial[algebra]
 declare mod_mod_trivial[algebra]
 declare div_by_0[algebra]
 declare mod_by_0[algebra]
 declare mult_div_mod_eq[algebra]
-declare div_mod_equality2[symmetric, algebra]
 declare div_minus_minus[algebra]
 declare mod_minus_minus[algebra]
 declare div_minus_right[algebra]
