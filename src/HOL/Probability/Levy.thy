@@ -8,11 +8,6 @@ theory Levy
   imports Characteristic_Functions Helly_Selection Sinc_Integral
 begin
 
-lemma LIM_zero_cancel:
-  fixes f :: "_ \<Rightarrow> 'b::real_normed_vector"
-  shows "((\<lambda>x. f x - l) \<longlongrightarrow> 0) F \<Longrightarrow> (f \<longlongrightarrow> l) F"
-unfolding tendsto_iff dist_norm by simp
-
 subsection \<open>The Levy inversion theorem\<close>
 
 (* Actually, this is not needed for us -- but it is useful for other purposes. (See Billingsley.) *)
@@ -390,7 +385,7 @@ proof -
       by (intro borel_integrable_compact[OF compact_Icc] continuous_at_imp_continuous_on
                 continuous_intros ballI M'.isCont_char continuous_intros)
     have "cmod (CLBINT t:{-d/2..d/2}. 1 - char M' t) \<le> LBINT t:{-d/2..d/2}. cmod (1 - char M' t)"
-      using integral_norm_bound[OF 2] by simp
+      using integral_norm_bound[of _ "\<lambda>x. indicator {u..v} x *\<^sub>R (1 - char M' x)" for u v] by simp
     also have 4: "\<dots> \<le> LBINT t:{-d/2..d/2}. \<epsilon> / 4"
       apply (rule integral_mono [OF 3])
        apply (simp add: emeasure_lborel_Icc_eq)

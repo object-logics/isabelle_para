@@ -459,6 +459,99 @@ proof
 qed
 
 
+lemma countable_separating_set_linorder1:
+  shows "\<exists>B::('a::{linorder_topology, second_countable_topology} set). countable B \<and> (\<forall>x y. x < y \<longrightarrow> (\<exists>b \<in> B. x < b \<and> b \<le> y))"
+proof -
+  obtain A::"'a set set" where "countable A" "topological_basis A" using ex_countable_basis by auto
+  define B1 where "B1 = {(LEAST x. x \<in> U)| U. U \<in> A}"
+  then have "countable B1" using `countable A` by (simp add: Setcompr_eq_image)
+  define B2 where "B2 = {(SOME x. x \<in> U)| U. U \<in> A}"
+  then have "countable B2" using `countable A` by (simp add: Setcompr_eq_image)
+  have "\<exists>b \<in> B1 \<union> B2. x < b \<and> b \<le> y" if "x < y" for x y
+  proof (cases)
+    assume "\<exists>z. x < z \<and> z < y"
+    then obtain z where z: "x < z \<and> z < y" by auto
+    define U where "U = {x<..<y}"
+    then have "open U" by simp
+    moreover have "z \<in> U" using z U_def by simp
+    ultimately obtain V where "V \<in> A" "z \<in> V" "V \<subseteq> U" using topological_basisE[OF `topological_basis A`] by auto
+    define w where "w = (SOME x. x \<in> V)"
+    then have "w \<in> V" using `z \<in> V` by (metis someI2)
+    then have "x < w \<and> w \<le> y" using `w \<in> V` `V \<subseteq> U` U_def by fastforce
+    moreover have "w \<in> B1 \<union> B2" using w_def B2_def `V \<in> A` by auto
+    ultimately show ?thesis by auto
+  next
+    assume "\<not>(\<exists>z. x < z \<and> z < y)"
+    then have *: "\<And>z. z > x \<Longrightarrow> z \<ge> y" by auto
+    define U where "U = {x<..}"
+    then have "open U" by simp
+    moreover have "y \<in> U" using `x < y` U_def by simp
+    ultimately obtain "V" where "V \<in> A" "y \<in> V" "V \<subseteq> U" using topological_basisE[OF `topological_basis A`] by auto
+    have "U = {y..}" unfolding U_def using * `x < y` by auto
+    then have "V \<subseteq> {y..}" using `V \<subseteq> U` by simp
+    then have "(LEAST w. w \<in> V) = y" using `y \<in> V` by (meson Least_equality atLeast_iff subsetCE)
+    then have "y \<in> B1 \<union> B2" using `V \<in> A` B1_def by auto
+    moreover have "x < y \<and> y \<le> y" using `x < y` by simp
+    ultimately show ?thesis by auto
+  qed
+  moreover have "countable (B1 \<union> B2)" using `countable B1` `countable B2` by simp
+  ultimately show ?thesis by auto
+qed
+
+lemma countable_separating_set_linorder2:
+  shows "\<exists>B::('a::{linorder_topology, second_countable_topology} set). countable B \<and> (\<forall>x y. x < y \<longrightarrow> (\<exists>b \<in> B. x \<le> b \<and> b < y))"
+proof -
+  obtain A::"'a set set" where "countable A" "topological_basis A" using ex_countable_basis by auto
+  define B1 where "B1 = {(GREATEST x. x \<in> U) | U. U \<in> A}"
+  then have "countable B1" using `countable A` by (simp add: Setcompr_eq_image)
+  define B2 where "B2 = {(SOME x. x \<in> U)| U. U \<in> A}"
+  then have "countable B2" using `countable A` by (simp add: Setcompr_eq_image)
+  have "\<exists>b \<in> B1 \<union> B2. x \<le> b \<and> b < y" if "x < y" for x y
+  proof (cases)
+    assume "\<exists>z. x < z \<and> z < y"
+    then obtain z where z: "x < z \<and> z < y" by auto
+    define U where "U = {x<..<y}"
+    then have "open U" by simp
+    moreover have "z \<in> U" using z U_def by simp
+    ultimately obtain "V" where "V \<in> A" "z \<in> V" "V \<subseteq> U" using topological_basisE[OF `topological_basis A`] by auto
+    define w where "w = (SOME x. x \<in> V)"
+    then have "w \<in> V" using `z \<in> V` by (metis someI2)
+    then have "x \<le> w \<and> w < y" using `w \<in> V` `V \<subseteq> U` U_def by fastforce
+    moreover have "w \<in> B1 \<union> B2" using w_def B2_def `V \<in> A` by auto
+    ultimately show ?thesis by auto
+  next
+    assume "\<not>(\<exists>z. x < z \<and> z < y)"
+    then have *: "\<And>z. z < y \<Longrightarrow> z \<le> x" using leI by blast
+    define U where "U = {..<y}"
+    then have "open U" by simp
+    moreover have "x \<in> U" using `x < y` U_def by simp
+    ultimately obtain "V" where "V \<in> A" "x \<in> V" "V \<subseteq> U" using topological_basisE[OF `topological_basis A`] by auto
+    have "U = {..x}" unfolding U_def using * `x < y` by auto
+    then have "V \<subseteq> {..x}" using `V \<subseteq> U` by simp
+    then have "(GREATEST x. x \<in> V) = x" using `x \<in> V` by (meson Greatest_equality atMost_iff subsetCE)
+    then have "x \<in> B1 \<union> B2" using `V \<in> A` B1_def by auto
+    moreover have "x \<le> x \<and> x < y" using `x < y` by simp
+    ultimately show ?thesis by auto
+  qed
+  moreover have "countable (B1 \<union> B2)" using `countable B1` `countable B2` by simp
+  ultimately show ?thesis by auto
+qed
+
+lemma countable_separating_set_dense_linorder:
+  shows "\<exists>B::('a::{linorder_topology, dense_linorder, second_countable_topology} set). countable B \<and> (\<forall>x y. x < y \<longrightarrow> (\<exists>b \<in> B. x < b \<and> b < y))"
+proof -
+  obtain B::"'a set" where B: "countable B" "\<And>x y. x < y \<Longrightarrow> (\<exists>b \<in> B. x < b \<and> b \<le> y)"
+    using countable_separating_set_linorder1 by auto
+  have "\<exists>b \<in> B. x < b \<and> b < y" if "x < y" for x y
+  proof -
+    obtain z where "x < z" "z < y" using `x < y` dense by blast
+    then obtain b where "b \<in> B" "x < b \<and> b \<le> z" using B(2) by auto
+    then have "x < b \<and> b < y" using `z < y` by auto
+    then show ?thesis using `b \<in> B` by auto
+  qed
+  then show ?thesis using B(1) by auto
+qed
+
 subsection \<open>Polish spaces\<close>
 
 text \<open>Textbooks define Polish spaces as completely metrizable.
@@ -940,6 +1033,14 @@ lemma mem_cball_0 [simp]:
   fixes x :: "'a::real_normed_vector"
   shows "x \<in> cball 0 e \<longleftrightarrow> norm x \<le> e"
   by (simp add: dist_norm)
+
+lemma disjoint_ballI:
+  shows "dist x y \<ge> r+s \<Longrightarrow> ball x r \<inter> ball y s = {}"
+  using dist_triangle_less_add not_le by fastforce
+
+lemma disjoint_cballI:
+  shows "dist x y > r+s \<Longrightarrow> cball x r \<inter> cball y s = {}"
+  by (metis add_mono disjoint_iff_not_equal dist_triangle2 dual_order.trans leD mem_cball)
 
 lemma mem_sphere_0 [simp]:
   fixes x :: "'a::real_normed_vector"
@@ -5342,62 +5443,62 @@ proof (rule completeI)
 qed
 
 lemma complete_imp_closed:
-  fixes s :: "'a::metric_space set"
-  assumes "complete s"
-  shows "closed s"
+  fixes S :: "'a::metric_space set"
+  assumes "complete S"
+  shows "closed S"
 proof (unfold closed_sequential_limits, clarify)
-  fix f x assume "\<forall>n. f n \<in> s" and "f \<longlonglongrightarrow> x"
+  fix f x assume "\<forall>n. f n \<in> S" and "f \<longlonglongrightarrow> x"
   from \<open>f \<longlonglongrightarrow> x\<close> have "Cauchy f"
     by (rule LIMSEQ_imp_Cauchy)
-  with \<open>complete s\<close> and \<open>\<forall>n. f n \<in> s\<close> obtain l where "l \<in> s" and "f \<longlonglongrightarrow> l"
+  with \<open>complete S\<close> and \<open>\<forall>n. f n \<in> S\<close> obtain l where "l \<in> S" and "f \<longlonglongrightarrow> l"
     by (rule completeE)
   from \<open>f \<longlonglongrightarrow> x\<close> and \<open>f \<longlonglongrightarrow> l\<close> have "x = l"
     by (rule LIMSEQ_unique)
-  with \<open>l \<in> s\<close> show "x \<in> s"
+  with \<open>l \<in> S\<close> show "x \<in> S"
     by simp
 qed
 
 lemma complete_Int_closed:
-  fixes s :: "'a::metric_space set"
-  assumes "complete s" and "closed t"
-  shows "complete (s \<inter> t)"
+  fixes S :: "'a::metric_space set"
+  assumes "complete S" and "closed t"
+  shows "complete (S \<inter> t)"
 proof (rule completeI)
-  fix f assume "\<forall>n. f n \<in> s \<inter> t" and "Cauchy f"
-  then have "\<forall>n. f n \<in> s" and "\<forall>n. f n \<in> t"
+  fix f assume "\<forall>n. f n \<in> S \<inter> t" and "Cauchy f"
+  then have "\<forall>n. f n \<in> S" and "\<forall>n. f n \<in> t"
     by simp_all
-  from \<open>complete s\<close> obtain l where "l \<in> s" and "f \<longlonglongrightarrow> l"
-    using \<open>\<forall>n. f n \<in> s\<close> and \<open>Cauchy f\<close> by (rule completeE)
+  from \<open>complete S\<close> obtain l where "l \<in> S" and "f \<longlonglongrightarrow> l"
+    using \<open>\<forall>n. f n \<in> S\<close> and \<open>Cauchy f\<close> by (rule completeE)
   from \<open>closed t\<close> and \<open>\<forall>n. f n \<in> t\<close> and \<open>f \<longlonglongrightarrow> l\<close> have "l \<in> t"
     by (rule closed_sequentially)
-  with \<open>l \<in> s\<close> and \<open>f \<longlonglongrightarrow> l\<close> show "\<exists>l\<in>s \<inter> t. f \<longlonglongrightarrow> l"
+  with \<open>l \<in> S\<close> and \<open>f \<longlonglongrightarrow> l\<close> show "\<exists>l\<in>S \<inter> t. f \<longlonglongrightarrow> l"
     by fast
 qed
 
 lemma complete_closed_subset:
-  fixes s :: "'a::metric_space set"
-  assumes "closed s" and "s \<subseteq> t" and "complete t"
-  shows "complete s"
-  using assms complete_Int_closed [of t s] by (simp add: Int_absorb1)
+  fixes S :: "'a::metric_space set"
+  assumes "closed S" and "S \<subseteq> t" and "complete t"
+  shows "complete S"
+  using assms complete_Int_closed [of t S] by (simp add: Int_absorb1)
 
 lemma complete_eq_closed:
-  fixes s :: "('a::complete_space) set"
-  shows "complete s \<longleftrightarrow> closed s"
+  fixes S :: "('a::complete_space) set"
+  shows "complete S \<longleftrightarrow> closed S"
 proof
-  assume "closed s" then show "complete s"
+  assume "closed S" then show "complete S"
     using subset_UNIV complete_UNIV by (rule complete_closed_subset)
 next
-  assume "complete s" then show "closed s"
+  assume "complete S" then show "closed S"
     by (rule complete_imp_closed)
 qed
 
-lemma convergent_eq_cauchy:
-  fixes s :: "nat \<Rightarrow> 'a::complete_space"
-  shows "(\<exists>l. (s \<longlongrightarrow> l) sequentially) \<longleftrightarrow> Cauchy s"
+lemma convergent_eq_Cauchy:
+  fixes S :: "nat \<Rightarrow> 'a::complete_space"
+  shows "(\<exists>l. (S \<longlongrightarrow> l) sequentially) \<longleftrightarrow> Cauchy S"
   unfolding Cauchy_convergent_iff convergent_def ..
 
 lemma convergent_imp_bounded:
-  fixes s :: "nat \<Rightarrow> 'a::metric_space"
-  shows "(s \<longlongrightarrow> l) sequentially \<Longrightarrow> bounded (range s)"
+  fixes S :: "nat \<Rightarrow> 'a::metric_space"
+  shows "(S \<longlongrightarrow> l) sequentially \<Longrightarrow> bounded (range S)"
   by (intro cauchy_imp_bounded LIMSEQ_imp_Cauchy)
 
 lemma compact_cball[simp]:
@@ -5407,15 +5508,15 @@ lemma compact_cball[simp]:
   by blast
 
 lemma compact_frontier_bounded[intro]:
-  fixes s :: "'a::heine_borel set"
-  shows "bounded s \<Longrightarrow> compact (frontier s)"
+  fixes S :: "'a::heine_borel set"
+  shows "bounded S \<Longrightarrow> compact (frontier S)"
   unfolding frontier_def
   using compact_eq_bounded_closed
   by blast
 
 lemma compact_frontier[intro]:
-  fixes s :: "'a::heine_borel set"
-  shows "compact s \<Longrightarrow> compact (frontier s)"
+  fixes S :: "'a::heine_borel set"
+  shows "compact S \<Longrightarrow> compact (frontier S)"
   using compact_eq_bounded_closed compact_frontier_bounded
   by blast
 
@@ -5435,8 +5536,8 @@ corollary closed_sphere  [simp]:
 by (simp add: compact_imp_closed)
 
 lemma frontier_subset_compact:
-  fixes s :: "'a::heine_borel set"
-  shows "compact s \<Longrightarrow> frontier s \<subseteq> s"
+  fixes S :: "'a::heine_borel set"
+  shows "compact S \<Longrightarrow> frontier S \<subseteq> S"
   using frontier_subset_closed compact_eq_bounded_closed
   by blast
 
@@ -5630,7 +5731,7 @@ next
     apply auto
     done
   then obtain l where l: "\<forall>x. P x \<longrightarrow> ((\<lambda>n. s n x) \<longlongrightarrow> l x) sequentially"
-    unfolding convergent_eq_cauchy[symmetric]
+    unfolding convergent_eq_Cauchy[symmetric]
     using choice[of "\<lambda>x l. P x \<longrightarrow> ((\<lambda>n. s n x) \<longlongrightarrow> l) sequentially"]
     by auto
   {
@@ -5988,6 +6089,11 @@ next
     unfolding uniformly_continuous_on_def by blast
 qed
 
+lemma continuous_closed_imp_Cauchy_continuous:
+  fixes S :: "('a::complete_space) set"
+  shows "\<lbrakk>continuous_on S f; closed S; Cauchy \<sigma>; \<And>n. (\<sigma> n) \<in> S\<rbrakk> \<Longrightarrow> Cauchy(f o \<sigma>)"
+  apply (simp add: complete_eq_closed [symmetric] continuous_on_sequentially)
+  by (meson LIMSEQ_imp_Cauchy complete_def)
 
 text\<open>The usual transformation theorems.\<close>
 
@@ -6537,7 +6643,7 @@ proof -
 
   from uniformly_continuous_on_Cauchy[OF uc LIMSEQ_imp_Cauchy, OF xs]
   obtain l where l: "(\<lambda>n. f (xs n)) \<longlonglongrightarrow> l"
-    by atomize_elim (simp only: convergent_eq_cauchy)
+    by atomize_elim (simp only: convergent_eq_Cauchy)
 
   have "(f \<longlongrightarrow> l) (at x within X)"
   proof (safe intro!: Lim_within_LIMSEQ)
@@ -6548,7 +6654,7 @@ proof -
 
     from uniformly_continuous_on_Cauchy[OF uc LIMSEQ_imp_Cauchy, OF \<open>xs' \<longlonglongrightarrow> x\<close> \<open>xs' _ \<in> X\<close>]
     obtain l' where l': "(\<lambda>n. f (xs' n)) \<longlonglongrightarrow> l'"
-      by atomize_elim (simp only: convergent_eq_cauchy)
+      by atomize_elim (simp only: convergent_eq_Cauchy)
 
     show "(\<lambda>n. f (xs' n)) \<longlonglongrightarrow> l"
     proof (rule tendstoI)
@@ -8688,7 +8794,7 @@ next
     unfolding homeomorphic_def homeomorphism_def
     by (metis equalityI image_subset_iff subsetI)
  qed
- 
+
 lemma homeomorphicI [intro?]:
    "\<lbrakk>f ` S = T; g ` T = S;
      continuous_on S f; continuous_on T g;
@@ -10037,7 +10143,7 @@ proof (clarsimp simp: continuous_openin_preimage_eq)
     apply (rule openin_Union, clarify)
     apply (metis (full_types) \<open>open U\<close> cont clo openin_trans continuous_openin_preimage_gen)
     done
-qed 
+qed
 
 lemma pasting_lemma_exists:
   fixes f :: "'i \<Rightarrow> 'a::topological_space \<Rightarrow> 'b::topological_space"
