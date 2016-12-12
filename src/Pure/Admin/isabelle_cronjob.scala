@@ -97,7 +97,7 @@ object Isabelle_Cronjob
   private val remote_builds =
     List(
       List(Remote_Build("lxbroy8",
-        options = "-m32 -B -M1x2,2 -t polyml-test -e 'init_component /home/isabelle/contrib/polyml-test-7a7b742897e9'",
+        options = "-m32 -B -M1x2,2 -t polyml-test -e 'init_component /home/isabelle/contrib/polyml-test-8529546198aa'",
         args = "-N -g timing")),
       List(Remote_Build("lxbroy9", options = "-m32 -B -M1x2,2", args = "-N -g timing")),
       List(Remote_Build("lxbroy10", options = "-m32 -B -M1x4,2,4,6", args = "-N -g timing")),
@@ -126,7 +126,7 @@ object Isabelle_Cronjob
                 Build_History.remote_build_history(ssh,
                   isabelle_repos,
                   isabelle_repos.ext(r.host),
-                  isabelle_repos_source = isabelle_release_source,
+                  isabelle_repos_source = isabelle_dev_source,
                   self_update = self_update,
                   push_isabelle_home = push_isabelle_home,
                   options =
