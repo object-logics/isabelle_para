@@ -1,0 +1,89 @@
+{
+    "name": "isabelle",
+    "displayName": "Isabelle",
+    "description": "Isabelle Prover IDE",
+    "keywords": [
+        "theorem prover",
+        "formalized mathematics",
+        "mathematical logic",
+        "functional programming",
+        "document preparation"
+        ],
+    "icon": "isabelle.png",
+    "version": "0.3.0",
+    "publisher": "makarius",
+    "license": "BSD-3-Clause",
+    "repository": { "url": "http://isabelle.in.tum.de/repos/isabelle" },
+    "engines": { "vscode": "^1.8.0" },
+    "categories": ["Languages"],
+    "activationEvents": [
+        "onLanguage:isabelle",
+        "onLanguage:isabelle-ml"
+    ],
+    "main": "./out/src/extension",
+    "contributes": {
+        "languages": [
+            {
+                "id": "isabelle",
+                "aliases": ["Isabelle"],
+                "extensions": [".thy"],
+                "configuration": "./isabelle-language.json"
+            },
+            {
+                "id": "isabelle-ml",
+                "aliases": ["Isabelle/ML"],
+                "extensions": [".ML"],
+                "configuration": "./isabelle-ml-language.json"
+            }
+
+        ],
+        "grammars": [
+            {
+                "language": "isabelle",
+                "scopeName": "source.isabelle",
+                "path": "./isabelle-grammar.json"
+            },
+            {
+                "language": "isabelle-ml",
+                "scopeName": "source.isabelle-ml",
+                "path": "./isabelle-ml-grammar.json"
+            }
+        ],
+        "configuration": {
+            "title": "Isabelle",
+            "properties": {
+                "isabelle.cygwin_root": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Root of Cygwin installation on Windows (e.g. ISABELLE_HOME/cygwin)."
+                },
+                "isabelle.home": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Main Isabelle directory (ISABELLE_HOME)."
+                },
+                "isabelle.args": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "default": [],
+                    "description": "Command-line arguments for isabelle vscode_server process."
+                }
+            }
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "tsc -p ./",
+        "compile": "tsc -watch -p ./",
+        "postinstall": "node ./node_modules/vscode/bin/install"
+    },
+    "devDependencies": {
+        "typescript": "^2.0.3",
+        "vscode": "^1.0.0",
+        "mocha": "^2.3.3",
+        "@types/node": "^6.0.40",
+        "@types/mocha": "^2.2.32"
+    },
+    "dependencies": {
+        "vscode-languageclient": "^2.6.3"
+    }
+}

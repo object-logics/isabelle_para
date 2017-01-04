@@ -233,6 +233,7 @@ text \<open>
   Options are:
     -D NAME=X    set JVM system property
     -J OPTION    add JVM runtime option
+    -R           open ROOT entry of logic session and use its parent
     -b           build only
     -d DIR       include session directory
     -f           fresh build
@@ -255,6 +256,11 @@ text \<open>
   option determines where to store the result session image of @{tool build}.
   The \<^verbatim>\<open>-n\<close> option bypasses the implicit build process for the selected
   session image.
+
+  Option \<^verbatim>\<open>-R\<close> modifies the meaning of option \<^verbatim>\<open>-l\<close> as follows: the \<^verbatim>\<open>ROOT\<close>
+  entry of the specified session is opened in the editor, while its parent
+  session is used for formal checking. This facilitates maintenance of a
+  broken session, by moving the Prover IDE quickly to relevant source files.
 
   The \<^verbatim>\<open>-m\<close> option specifies additional print modes for the prover process.
   Note that the system option @{system_option_ref jedit_print_mode} allows to
@@ -723,6 +729,11 @@ text \<open>
 
   The above options are accessible in the menu \<^emph>\<open>Plugins / Plugin Options /
   Isabelle / General\<close>.
+
+  \<^medskip> Automatic indentation has a tendency to produce trailing whitespace. That
+  can be purged manually with the jEdit action @{action "remove-trailing-ws"}
+  (shortcut \<^verbatim>\<open>C+e r\<close>). Moreover, the \<^emph>\<open>WhiteSpace\<close> plugin provides some
+  aggressive options to trim whitespace on buffer-save.
 \<close>
 
 

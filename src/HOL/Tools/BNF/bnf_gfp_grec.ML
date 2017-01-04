@@ -261,7 +261,7 @@ fun define_single_primrec b eqs lthy =
     val (([free], [def_free], [simps_free]), (lthy, lthy_old)) = lthy
       |> Local_Theory.open_target |> snd
       |> Local_Theory.map_background_naming (mk_internal true lthy Name_Space.concealed) (*TODO check*)
-      |> primrec [] [(b, NONE, NoSyn)] (map (fn eq => ((Binding.empty_atts, eq), [], [])) eqs)
+      |> primrec false [] [(b, NONE, NoSyn)] (map (fn eq => ((Binding.empty_atts, eq), [], [])) eqs)
       ||> `Local_Theory.close_target;
 
     val phi = Proof_Context.export_morphism lthy_old lthy;
@@ -1005,8 +1005,8 @@ fun mk_natural_goal ctxt simple_T_mapfs fs t u =
 
     val simple_Ts = map fst simple_T_mapfs;
 
-    val t_map = build_map ctxt simple_Ts build_simple (apply2 (range_type o fastype_of) (t, u));
-    val u_map = build_map ctxt simple_Ts build_simple (apply2 (domain_type o fastype_of) (t, u));
+    val t_map = build_map ctxt simple_Ts [] build_simple (apply2 (range_type o fastype_of) (t, u));
+    val u_map = build_map ctxt simple_Ts [] build_simple (apply2 (domain_type o fastype_of) (t, u));
   in
     mk_Trueprop_eq (HOLogic.mk_comp (u, u_map), HOLogic.mk_comp (t_map, t))
   end;

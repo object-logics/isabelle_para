@@ -64,20 +64,50 @@ object Position
       }
   }
 
-  object Id_Offset0
+  object Item_Id
   {
-    def unapply(pos: T): Option[(Long, Symbol.Offset)] =
+    def unapply(pos: T): Option[(Long, Symbol.Range)] =
       pos match {
-        case Id(id) => Some((id, Offset.unapply(pos) getOrElse 0))
+        case Id(id) =>
+          val offset = Offset.unapply(pos) getOrElse 0
+          val end_offset = End_Offset.unapply(pos) getOrElse (offset + 1)
+          Some((id, Text.Range(offset, end_offset)))
         case _ => None
       }
   }
 
-  object Def_Id_Offset0
+  object Item_Def_Id
   {
-    def unapply(pos: T): Option[(Long, Symbol.Offset)] =
+    def unapply(pos: T): Option[(Long, Symbol.Range)] =
       pos match {
-        case Def_Id(id) => Some((id, Def_Offset.unapply(pos) getOrElse 0))
+        case Def_Id(id) =>
+          val offset = Def_Offset.unapply(pos) getOrElse 0
+          val end_offset = Def_End_Offset.unapply(pos) getOrElse (offset + 1)
+          Some((id, Text.Range(offset, end_offset)))
+        case _ => None
+      }
+  }
+
+  object Item_File
+  {
+    def unapply(pos: T): Option[(String, Int, Symbol.Range)] =
+      pos match {
+        case Line_File(line, name) =>
+          val offset = Offset.unapply(pos) getOrElse 0
+          val end_offset = End_Offset.unapply(pos) getOrElse (offset + 1)
+          Some((name, line, Text.Range(offset, end_offset)))
+        case _ => None
+      }
+  }
+
+  object Item_Def_File
+  {
+    def unapply(pos: T): Option[(String, Int, Symbol.Range)] =
+      pos match {
+        case Def_Line_File(line, name) =>
+          val offset = Def_Offset.unapply(pos) getOrElse 0
+          val end_offset = Def_End_Offset.unapply(pos) getOrElse (offset + 1)
+          Some((name, line, Text.Range(offset, end_offset)))
         case _ => None
       }
   }
@@ -102,21 +132,20 @@ object Position
 
   /* here: user output */
 
-  def here(pos: T): String =
-    Markup(Markup.POSITION, pos).markup(
-      (Line.unapply(pos), File.unapply(pos)) match {
-        case (Some(i), None) => " (line " + i.toString + ")"
-        case (Some(i), Some(name)) => " (line " + i.toString + " of " + quote(name) + ")"
-        case (None, Some(name)) => " (file " + quote(name) + ")"
-        case _ => ""
-      })
-
-  def here_undelimited(pos: T): String =
-    Markup(Markup.POSITION, pos).markup(
-      (Line.unapply(pos), File.unapply(pos)) match {
-        case (Some(i), None) => "line " + i.toString
-        case (Some(i), Some(name)) => "line " + i.toString + " of " + quote(name)
-        case (None, Some(name)) => "file " + quote(name)
-        case _ => ""
-      })
+  def here(props: T, delimited: Boolean = false): String =
+  {
+    val pos = props.filter(p => Markup.POSITION_PROPERTIES(p._1))
+    if (pos.isEmpty) ""
+    else {
+      val s0 =
+        (Line.unapply(pos), File.unapply(pos)) match {
+          case (Some(i), None) => "line " + i.toString
+          case (Some(i), Some(name)) => "line " + i.toString + " of " + quote(name)
+          case (None, Some(name)) => "file " + quote(name)
+          case _ => ""
+        }
+      val s = if (s0 == "") s0 else if (delimited) " (" + s0 + ")" else " " + s0
+      Markup(Markup.POSITION, pos).markup(s)
+    }
+  }
 }

@@ -19,7 +19,7 @@ struct
 
 fun report ctxt =
   if Context_Position.is_visible ctxt then
-    Output.report [Markup.markup Markup.bad "Skipped proof"]
+    Output.report [Markup.markup (Markup.bad ()) "Skipped proof"]
   else ();
 
 
@@ -27,7 +27,7 @@ fun report ctxt =
 
 val (_, make_thm_cterm) =
   Context.>>>
-    (Context.map_theory_result (Thm.add_oracle (Binding.make ("skip_proof", @{here}), I)));
+    (Context.map_theory_result (Thm.add_oracle (Binding.make ("skip_proof", \<^here>), I)));
 
 fun make_thm thy prop = make_thm_cterm (Thm.global_cterm_of thy prop);
 

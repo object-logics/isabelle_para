@@ -49,9 +49,6 @@ open BNF_GFP_Grec_Tactics
 
 val mk_case_sumN_balanced = Balanced_Tree.make mk_case_sum;
 
-fun not_codatatype ctxt T =
-  error ("Not a codatatype: " ^ Syntax.string_of_typ ctxt T);
-
 fun generalize_types max_j T U =
   let
     val vars = Unsynchronized.ref [];
@@ -156,7 +153,8 @@ fun mk_abs_transfer ctxt fpT_name =
         Variable.add_free_names ctxt goal []
         |> (fn vars => Goal.prove_sorry ctxt vars [] goal (fn {context = ctxt, prems = _} =>
           unfold_thms_tac ctxt [rel_def] THEN
-          HEADGOAL (rtac ctxt (@{thm Abs_transfer} OF [type_definition, type_definition]))))
+          HEADGOAL (rtac ctxt refl ORELSE'
+            rtac ctxt (@{thm Abs_transfer} OF [type_definition, type_definition]))))
       end
   end;
 
@@ -178,7 +176,7 @@ fun mk_rep_transfer ctxt fpT_name =
         Variable.add_free_names ctxt goal []
         |> (fn vars => Goal.prove_sorry ctxt vars [] goal (fn {context = ctxt, prems = _} =>
           unfold_thms_tac ctxt [rel_def] THEN
-          HEADGOAL (rtac ctxt @{thm vimage2p_rel_fun})))
+          HEADGOAL (rtac ctxt refl ORELSE' rtac ctxt @{thm vimage2p_rel_fun})))
       end
   end;
 
@@ -208,7 +206,7 @@ fun mk_pointful_natural_from_transfer ctxt transfer =
       if op = TU then
         t
       else
-        (case try (build_map ctxt [] (the o AList.lookup (op =) AB_fs)) TU of
+        (case try (build_map ctxt [] [] (the o AList.lookup (op =) AB_fs)) TU of
           SOME mapx => mapx $ t
         | NONE => raise UNNATURAL ());
 
@@ -355,7 +353,7 @@ fun generic_spec_of friend ctxt arg_Ts res_T (raw_buffer0 as {VLeaf = VLeaf0, ..
     fun mk_friend_spec () =
       let
         fun encapsulate_nested U T free =
-          betapply (build_map ctxt [] (fn (T, _) =>
+          betapply (build_map ctxt [] [] (fn (T, _) =>
               if T = domain_type VLeaf0_T then Abs (Name.uu, T, VLeaf0 $ Bound 0)
               else Abs (Name.uu, T, Bound 0)) (T, U),
             free);

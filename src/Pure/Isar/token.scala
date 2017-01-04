@@ -152,6 +152,8 @@ object Token
     (toks.toList, ctxt)
   }
 
+  val newline: Token = explode(Keyword.Keywords.empty, "\n").head
+
 
   /* implode */
 
@@ -205,7 +207,7 @@ object Token
     def position(): Position.T = position(0)
     def position(token: Token): Position.T = position(advance(token).offset)
 
-    override def toString: String = Position.here_undelimited(position())
+    override def toString: String = Position.here(position(), delimited = false)
   }
 
   abstract class Reader extends scala.util.parsing.input.Reader[Token]

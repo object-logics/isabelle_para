@@ -208,15 +208,17 @@ fun mk_infos_of_mutually_recursive_new_datatypes prefs check_names fpT_names0 lt
   let
     val thy = Proof_Context.theory_of lthy;
 
-    fun not_datatype s = error (quote s ^ " is not a datatype");
+    fun not_datatype_name s =
+      error (quote s ^ " is not a datatype");
     fun not_mutually_recursive ss =
       error ("{" ^ commas ss ^ "} is not a complete set of mutually recursive datatypes");
 
     fun checked_fp_sugar_of s =
       (case fp_sugar_of lthy s of
         SOME (fp_sugar as {fp, fp_co_induct_sugar = SOME _, ...}) =>
-        if member (op =) prefs Include_GFPs orelse fp = Least_FP then fp_sugar else not_datatype s
-      | _ => not_datatype s);
+        if member (op =) prefs Include_GFPs orelse fp = Least_FP then fp_sugar
+        else not_datatype_name s
+      | _ => not_datatype_name s);
 
     val fpTs0 as Type (_, var_As) :: _ =
       map (#T o checked_fp_sugar_of o fst o dest_Type)
@@ -317,7 +319,7 @@ fun mk_infos_of_mutually_recursive_new_datatypes prefs check_names fpT_names0 lt
         |>> `(fn (inducts', induct', _, rec'_thmss) =>
           SOME ((inducts', induct', mk_induct_attrs ctrss'), (rec'_thmss, [])))
       else
-        not_datatype fpT_name1;
+        not_datatype_name fpT_name1;
 
     val rec'_names = map (fst o dest_Const) recs';
     val rec'_thms = flat rec'_thmss;
@@ -538,11 +540,11 @@ fun add_datatype prefs old_specs thy =
 
 fun old_of_new f (ts, _, simpss) = (ts, f simpss);
 
-val primrec = apfst (old_of_new flat) ooo BNF_LFP_Rec_Sugar.primrec [];
-val primrec_global = apfst (old_of_new flat) ooo BNF_LFP_Rec_Sugar.primrec_global [];
-val primrec_overloaded = apfst (old_of_new flat) oooo BNF_LFP_Rec_Sugar.primrec_overloaded [];
+val primrec = apfst (old_of_new flat) ooo BNF_LFP_Rec_Sugar.primrec false [];
+val primrec_global = apfst (old_of_new flat) ooo BNF_LFP_Rec_Sugar.primrec_global false [];
+val primrec_overloaded = apfst (old_of_new flat) oooo BNF_LFP_Rec_Sugar.primrec_overloaded false [];
 val primrec_simple = apfst (apfst fst o apsnd (old_of_new (flat o snd))) ooo
-  BNF_LFP_Rec_Sugar.primrec_simple;
+  BNF_LFP_Rec_Sugar.primrec_simple false;
 
 val _ =
   Outer_Syntax.local_theory @{command_keyword datatype_compat}

@@ -25,6 +25,7 @@ object Text
   {
     def apply(start: Offset): Range = Range(start, start)
 
+    val full: Range = apply(0, Integer.MAX_VALUE / 2)
     val offside: Range = apply(-1)
 
     object Ordering extends scala.math.Ordering[Text.Range]
@@ -37,9 +38,9 @@ object Text
   {
     // denotation: {start} Un {i. start < i & i < stop}
     if (start > stop)
-      error("Bad range: [" + start.toString + ":" + stop.toString + "]")
+      error("Bad range: [" + start.toString + ".." + stop.toString + "]")
 
-    override def toString: String = "[" + start.toString + ":" + stop.toString + "]"
+    override def toString: String = "[" + start.toString + ".." + stop.toString + "]"
 
     def length: Int = stop - start
 
@@ -79,7 +80,7 @@ object Text
   {
     val empty: Perspective = Perspective(Nil)
 
-    def full: Perspective = Perspective(List(Range(0, Integer.MAX_VALUE / 2)))
+    def full: Perspective = Perspective(List(Range.full))
 
     def apply(ranges: Seq[Range]): Perspective =
     {
@@ -179,5 +180,33 @@ object Text
           else Some(Edit.remove(start, text.substring(count)))
         (rest, remove(i, count, string))
       }
+  }
+
+
+  /* text length wrt. encoding */
+
+  trait Length
+  {
+    def apply(text: String): Int
+    def offset(text: String, i: Int): Option[Text.Offset]
+  }
+
+  object Length extends Length
+  {
+    def apply(text: String): Int = text.length
+    def offset(text: String, i: Int): Option[Text.Offset] =
+      if (0 <= i && i <= text.length) Some(i) else None
+
+    val encodings: List[(String, Length)] =
+      List(
+        "UTF-16" -> Length,
+        "UTF-8" -> UTF8.Length,
+        "codepoints" -> Codepoint.Length,
+        "symbols" -> Symbol.Length)
+
+    def encoding(name: String): Length =
+      encodings.collectFirst({ case (a, length) if name == a => length }) getOrElse
+        error("Bad text length encoding: " + quote(name) +
+          " (expected " + commas_quote(encodings.map(_._1)) + ")")
   }
 }

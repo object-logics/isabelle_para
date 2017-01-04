@@ -95,6 +95,12 @@ object Build
 
   /* source dependencies and static content */
 
+  object Session_Content
+  {
+    def empty: Session_Content =
+      Session_Content(Set.empty, Map.empty, Nil, Outer_Syntax.empty, Nil, Graph_Display.empty_graph)
+  }
+
   sealed case class Session_Content(
     loaded_theories: Set[String],
     known_theories: Map[String, Document.Node.Name],
@@ -229,8 +235,8 @@ object Build
     session_dependencies(options, inlined_files, dirs, List(session))(session)
   }
 
-  def outer_syntax(options: Options, session: String): Outer_Syntax =
-    session_content(options, false, Nil, session).syntax
+  def outer_syntax(options: Options, dirs: List[Path], session: String): Outer_Syntax =
+    session_content(options, false, dirs, session).syntax
 
 
   /* jobs */

@@ -69,7 +69,7 @@ object Thy_Header extends Parse.Parser
     Outer_Syntax.init().add_keywords(bootstrap_header)
 
 
-  /* file name */
+  /* file name vs. theory name */
 
   val PURE = "Pure"
   val ML_BOOTSTRAP = "ML_Bootstrap"
@@ -77,8 +77,12 @@ object Thy_Header extends Parse.Parser
   val ml_roots = List("ROOT0.ML" -> "ML_Root0", "ROOT.ML" -> ML_ROOT)
   val bootstrap_thys = List(PURE, ML_BOOTSTRAP).map(a => a -> ("Bootstrap_" + a))
 
+  private val Dir_Name = new Regex("""(.*?)[^/\\:]+""")
   private val Base_Name = new Regex(""".*?([^/\\:]+)""")
   private val Thy_Name = new Regex(""".*?([^/\\:]+)\.thy""")
+
+  def dir_name(s: String): String =
+    s match { case Dir_Name(name) => name case _ => "" }
 
   def base_name(s: String): String =
     s match { case Base_Name(name) => name case _ => error("Malformed import: " + quote(s)) }
@@ -93,6 +97,12 @@ object Thy_Header extends Parse.Parser
       case Base_Name(name) => ml_roots.collectFirst({ case (a, b) if a == name => b })
       case _ => None
     }
+
+  def is_ml_root(theory: String): Boolean =
+    ml_roots.exists({ case (_, b) => b == theory })
+
+  def is_bootstrap(theory: String): Boolean =
+    bootstrap_thys.exists({ case (_, b) => b == theory })
 
 
   /* header */
@@ -172,6 +182,35 @@ object Thy_Header extends Parse.Parser
 
   def read(source: CharSequence, start: Token.Pos): Thy_Header =
     read(new CharSequenceReader(source), start)
+
+
+  /* line-oriented text */
+
+  def header_text(doc: Line.Document): String =
+  {
+    val keywords = bootstrap_syntax.keywords
+    val toks = new mutable.ListBuffer[Token]
+    val iterator =
+      (for {
+        (toks, _) <-
+          doc.lines.iterator.scanLeft((List.empty[Token], Scan.Finished: Scan.Line_Context))(
+            {
+              case ((_, ctxt), line) => Token.explode_line(keywords, line.text, ctxt)
+            })
+        tok <- toks.iterator ++ Iterator.single(Token.newline)
+      } yield tok).dropWhile(tok => !tok.is_command(Thy_Header.THEORY))
+
+    @tailrec def until_begin
+    {
+      if (iterator.hasNext) {
+        val tok = iterator.next
+        toks += tok
+        if (!tok.is_begin) until_begin
+      }
+    }
+    until_begin
+    Token.implode(toks.toList)
+  }
 }
 
 

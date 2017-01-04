@@ -7,6 +7,8 @@ Basic URL operations.
 package isabelle
 
 
+import java.io.{File => JFile}
+import java.net.{URI, URISyntaxException}
 import java.net.{URL, MalformedURLException}
 import java.util.zip.GZIPInputStream
 
@@ -45,4 +47,40 @@ object Url
 
   def read(name: String): String = read(Url(name), false)
   def read_gzip(name: String): String = read(Url(name), true)
+
+
+  /* file URIs */
+
+  def file(uri: String): JFile = new JFile(new URI(uri))
+
+  def is_wellformed_file(uri: String): Boolean =
+    try { file(uri); true }
+    catch { case _: URISyntaxException | _: IllegalArgumentException => false }
+
+  def normalize_file(uri: String): String =
+    if (is_wellformed_file(uri)) {
+      val uri1 = new URI(uri).normalize.toASCIIString
+      if (uri1.startsWith("file://")) uri1
+      else {
+        Library.try_unprefix("file:/", uri1) match {
+          case Some(p) => "file:///" + p
+          case None => uri1
+        }
+      }
+    }
+    else uri
+
+  def platform_file(path: Path): String =
+  {
+    val path1 = path.expand
+    require(path1.is_absolute)
+    platform_file(File.platform_path(path1))
+  }
+
+  def platform_file(name: String): String =
+    if (name.startsWith("file://")) name
+    else {
+      val s = name.replaceAll(" ", "%20")
+      "file://" + (if (Platform.is_windows) s.replace('\\', '/') else s)
+    }
 }

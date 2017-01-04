@@ -1,7 +1,7 @@
 /*  Title:      Pure/General/file.scala
     Author:     Makarius
 
-File system operations.
+File-system operations.
 */
 
 package isabelle
@@ -33,7 +33,7 @@ object File
     if (Platform.is_windows) {
       val Platform_Root = new Regex("(?i)" +
         Pattern.quote(Isabelle_System.cygwin_root()) + """(?:\\+|\z)(.*)""")
-      val Drive = new Regex("""([a-zA-Z]):\\*(.*)""")
+      val Drive = new Regex("""\\?([a-zA-Z]):\\*(.*)""")
 
       platform_path.replace('/', '\\') match {
         case Platform_Root(rest) => "/" + rest.replace('\\', '/')
@@ -48,6 +48,7 @@ object File
   def standard_path(file: JFile): String = standard_path(file.getPath)
 
   def path(file: JFile): Path = Path.explode(standard_path(file))
+  def pwd(): Path = path(Path.current.file.toPath.toAbsolutePath.toFile)
 
   def standard_url(name: String): String =
     try {
@@ -94,16 +95,6 @@ object File
 
   def platform_path(path: Path): String = platform_path(standard_path(path))
   def platform_file(path: Path): JFile = new JFile(platform_path(path))
-
-  def platform_url(raw_path: Path): String =
-  {
-    val path = raw_path.expand
-    require(path.is_absolute)
-    val s = platform_path(path).replaceAll(" ", "%20")
-    if (!Platform.is_windows) "file://" + s
-    else if (s.startsWith("\\\\")) "file:" + s.replace('\\', '/')
-    else "file:///" + s.replace('\\', '/')
-  }
 
 
   /* bash path */

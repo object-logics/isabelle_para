@@ -100,6 +100,7 @@ sig
     'a list
   val mk_ctor: typ list -> term -> term
   val mk_dtor: typ list -> term -> term
+  val mk_bnf_sets: BNF_Def.bnf -> string * term list
   val liveness_of_fp_bnf: int -> BNF_Def.bnf -> bool list
   val nesting_bnfs: Proof.context -> typ list list list -> typ list -> BNF_Def.bnf list
 
@@ -162,6 +163,14 @@ sig
       * (((term list list * term list list * term list list list list * term list list list list)
           * term list list list) * typ list) -> (string -> binding) -> 'b list -> typ list ->
     term list -> term -> local_theory -> (term * thm) * local_theory
+  val mk_induct_raw_prem: (term -> term) -> Proof.context -> typ list list ->
+    (string * term list) list -> term -> term -> typ list -> typ list ->
+    term list * ((term * (term * term)) list * (int * term)) list * term
+  val finish_induct_prem: Proof.context -> int -> term list ->
+    term list * ((term * (term * term)) list * (int * term)) list * term -> term
+  val mk_coinduct_prem: Proof.context -> typ list list -> typ list list -> term list -> term ->
+    term -> term -> int -> term list -> term list list -> term list -> term list list ->
+    typ list list -> term
   val mk_induct_attrs: term list list -> Token.src list
   val mk_coinduct_attrs: typ list -> term list list -> term list list -> int list list ->
     Token.src list * Token.src list
@@ -170,18 +179,18 @@ sig
      BNF_Def.bnf list -> BNF_Def.bnf list -> typ list -> typ list -> typ list ->
      typ list list list -> thm list -> thm list -> thm list -> term list list -> thm list list ->
      term list -> thm list -> Proof.context -> lfp_sugar_thms
-  val derive_coinduct_thms_for_types: bool -> (term -> term) -> BNF_Def.bnf list -> thm ->
-    thm list -> BNF_Def.bnf list -> typ list -> typ list -> typ list list list -> int list ->
+  val derive_coinduct_thms_for_types: Proof.context -> bool -> (term -> term) -> BNF_Def.bnf list ->
+    thm -> thm list -> BNF_Def.bnf list -> typ list -> typ list -> typ list list list -> int list ->
     thm list -> thm list -> (thm -> thm) -> thm list list -> Ctr_Sugar.ctr_sugar list ->
-    Proof.context -> (thm list * thm) list
-  val derive_coinduct_corecs_thms_for_types: BNF_Def.bnf list ->
+    (thm list * thm) list
+  val derive_coinduct_corecs_thms_for_types: Proof.context -> BNF_Def.bnf list ->
     string * term list * term list list
       * (((term list list * term list list * term list list list list * term list list list list)
           * term list list list) * typ list) ->
     thm -> thm list -> thm list -> thm list -> BNF_Def.bnf list -> typ list -> typ list ->
     typ list -> typ list list list -> int list list -> int list list -> int list -> thm list ->
     thm list -> (thm -> thm) -> thm list list -> Ctr_Sugar.ctr_sugar list -> term list ->
-    thm list -> Proof.context -> gfp_sugar_thms
+    thm list -> gfp_sugar_thms
 
   val co_datatypes: BNF_Util.fp_kind -> (mixfix list -> binding list -> binding list ->
       binding list -> binding list list -> binding list -> (string * sort) list ->
@@ -524,7 +533,7 @@ fun build_binary_fun_app fs t u =
   Option.map (rapp u o rapp t) (choose_binary_fun fs (fastype_of t, fastype_of u));
 
 fun build_the_rel ctxt Rs Ts A B =
-  build_rel [] ctxt Ts (the o choose_binary_fun Rs) (A, B);
+  build_rel [] ctxt Ts [] (the o choose_binary_fun Rs) (A, B);
 fun build_rel_app ctxt Rs Ts t u =
   build_the_rel ctxt Rs Ts (fastype_of t) (fastype_of u) $ t $ u;
 
@@ -567,6 +576,19 @@ fun mk_ctor_or_dtor get_T Ts t =
 
 val mk_ctor = mk_ctor_or_dtor range_type;
 val mk_dtor = mk_ctor_or_dtor domain_type;
+
+fun mk_bnf_sets bnf =
+  let
+    val Type (T_name, Us) = T_of_bnf bnf;
+    val lives = lives_of_bnf bnf;
+    val sets = sets_of_bnf bnf;
+    fun mk_set U =
+      (case find_index (curry (op =) U) lives of
+        ~1 => Term.dummy
+      | i => nth sets i);
+  in
+    (T_name, map mk_set Us)
+  end;
 
 fun mk_xtor_co_recs thy fp fpTs Cs ts0 =
   let
@@ -614,10 +636,10 @@ fun massage_multi_notes b_names Ts =
 fun define_ctrs_dtrs_for_type fp_b_name fpT ctor dtor ctor_dtor dtor_ctor n ks abs ctr_bindings
     ctr_mixfixes ctr_Tss lthy =
   let
-    val ctr_absT = domain_type (fastype_of ctor);
+    val ctor_absT = domain_type (fastype_of ctor);
 
     val (((w, xss), u'), _) = lthy
-      |> yield_singleton (mk_Frees "w") ctr_absT
+      |> yield_singleton (mk_Frees "w") ctor_absT
       ||>> mk_Freess "x" ctr_Tss
       ||>> yield_singleton Variable.variant_fixes fp_b_name;
 
@@ -631,13 +653,13 @@ fun define_ctrs_dtrs_for_type fp_b_name fpT ctor dtor ctor_dtor dtor_ctor n ks a
         val vars = Variable.add_free_names lthy goal [];
       in
         Goal.prove_sorry lthy vars [] goal (fn {context = ctxt, ...} =>
-          mk_ctor_iff_dtor_tac ctxt (map (SOME o Thm.ctyp_of lthy) [ctr_absT, fpT])
+          mk_ctor_iff_dtor_tac ctxt (map (SOME o Thm.ctyp_of lthy) [ctor_absT, fpT])
             (Thm.cterm_of lthy ctor) (Thm.cterm_of lthy dtor) ctor_dtor dtor_ctor)
         |> Thm.close_derivation
       end;
 
     val ctr_rhss =
-      map2 (fn k => fn xs => fold_rev Term.lambda xs (ctor $ mk_absumprod ctr_absT abs n k xs))
+      map2 (fn k => fn xs => fold_rev Term.lambda xs (ctor $ mk_absumprod ctor_absT abs n k xs))
         ks xss;
 
     val ((raw_ctrs, raw_ctr_defs), (lthy, lthy_old)) = lthy
@@ -841,7 +863,7 @@ fun derive_map_set_rel_pred_thms plugins fp live As Bs C E abs_inverses ctr_defs
 
                 fun mk_arg (x as Free (_, T)) (Free (_, U)) =
                   if T = U then x
-                  else build_map lthy [] (the o AList.lookup (op =) ABfs) (T, U) $ x;
+                  else build_map lthy [] [] (the o AList.lookup (op =) ABfs) (T, U) $ x;
 
                 val xs' = map2 mk_arg xs ys;
               in
@@ -1223,7 +1245,7 @@ fun derive_map_set_rel_pred_thms plugins fp live As Bs C E abs_inverses ctr_defs
                 val lhsT = fastype_of lhs;
                 val map_rhsT =
                   map_atyps (perhaps (AList.lookup (op =) (map swap live_AsBs))) lhsT;
-                val map_rhs = build_map lthy []
+                val map_rhs = build_map lthy [] []
                   (the o (AList.lookup (op =) (live_AsBs ~~ fs))) (map_rhsT, lhsT);
                 val rhs = (case map_rhs of
                     Const (@{const_name id}, _) => selA $ ta
@@ -1520,7 +1542,7 @@ fun mk_corecs_args_types ctxt ctr_Tsss Cs absTs repTs ns mss dtor_corec_fun_Ts =
 
     val cpss = map2 (map o rapp) cs pss;
 
-    fun build_sum_inj mk_inj = build_map ctxt [] (uncurry mk_inj o dest_sumT o snd);
+    fun build_sum_inj mk_inj = build_map ctxt [] [] (uncurry mk_inj o dest_sumT o snd);
 
     fun build_dtor_corec_arg _ [] [cg] = cg
       | build_dtor_corec_arg T [cq] [cg, cg'] =
@@ -1604,6 +1626,80 @@ fun define_corec (_, cs, cpss, (((pgss, _, _, _), cqgsss), f_absTs)) mk_binding 
          @{map 5} mk_preds_getterss_join cs cpss f_absTs abss cqgsss)))
   end;
 
+fun mk_induct_raw_prem_prems names_ctxt Xss setss_fp_nesting (x as Free (s, Type (T_name, Ts0)))
+      (Type (_, Xs_Ts0)) =
+    (case AList.lookup (op =) setss_fp_nesting T_name of
+      NONE => []
+    | SOME raw_sets0 =>
+      let
+        val (Xs_Ts, (Ts, raw_sets)) =
+          filter (exists_subtype_in (flat Xss) o fst) (Xs_Ts0 ~~ (Ts0 ~~ raw_sets0))
+          |> split_list ||> split_list;
+        val sets = map (mk_set Ts0) raw_sets;
+        val (ys, names_ctxt') = names_ctxt |> mk_Frees s Ts;
+        val xysets = map (pair x) (ys ~~ sets);
+        val ppremss = map2 (mk_induct_raw_prem_prems names_ctxt' Xss setss_fp_nesting) ys Xs_Ts;
+      in
+        flat (map2 (map o apfst o cons) xysets ppremss)
+      end)
+  | mk_induct_raw_prem_prems _ Xss _ (x as Free (_, Type _)) X =
+    [([], (find_index (fn Xs => member (op =) Xs X) Xss + 1, x))]
+  | mk_induct_raw_prem_prems _ _ _ _ _ = [];
+
+fun mk_induct_raw_prem alter_x names_ctxt Xss setss_fp_nesting p ctr ctr_Ts ctrXs_Ts =
+  let
+    val (xs, names_ctxt') = names_ctxt |> mk_Frees "x" ctr_Ts;
+    val pprems =
+      flat (map2 (mk_induct_raw_prem_prems names_ctxt' Xss setss_fp_nesting) xs ctrXs_Ts);
+    val y = Term.list_comb (ctr, map alter_x xs);
+    val p' = enforce_type names_ctxt domain_type (fastype_of y) p;
+  in (xs, pprems, HOLogic.mk_Trueprop (p' $ y)) end;
+
+fun close_induct_prem_prem nn ps xs t =
+  fold_rev Logic.all (map Free (drop (nn + length xs)
+    (rev (Term.add_frees t (map dest_Free xs @ map_filter (try dest_Free) ps))))) t;
+
+fun finish_induct_prem_prem ctxt nn ps xs (xysets, (j, x)) =
+  let val p' = enforce_type ctxt domain_type (fastype_of x) (nth ps (j - 1)) in
+    close_induct_prem_prem nn ps xs (Logic.list_implies (map (fn (x', (y, set)) =>
+        mk_Trueprop_mem (y, set $ x')) xysets,
+      HOLogic.mk_Trueprop (p' $ x)))
+  end;
+
+fun finish_induct_prem ctxt nn ps (xs, raw_pprems, concl) =
+  fold_rev Logic.all xs (Logic.list_implies
+    (map (finish_induct_prem_prem ctxt nn ps xs) raw_pprems, concl));
+
+fun mk_coinduct_prem_ctr_concls ctxt Xss fpTss rs' n k udisc usels vdisc vsels ctrXs_Ts =
+  let
+    fun build_the_rel T Xs_T =
+      build_rel [] ctxt [] [] (fn (T, X) =>
+          nth rs' (find_index (fn Xs => member (op =) Xs X) Xss)
+          |> enforce_type ctxt domain_type T)
+        (T, Xs_T)
+      |> Term.subst_atomic_types (flat Xss ~~ flat fpTss);
+    fun build_rel_app usel vsel Xs_T =
+      fold rapp [usel, vsel] (build_the_rel (fastype_of usel) Xs_T);
+  in
+    (if k = n then [] else [HOLogic.mk_eq (udisc, vdisc)]) @
+    (if null usels then
+       []
+     else
+       [Library.foldr HOLogic.mk_imp (if n = 1 then [] else [udisc, vdisc],
+          Library.foldr1 HOLogic.mk_conj (@{map 3} build_rel_app usels vsels ctrXs_Ts))])
+  end;
+
+fun mk_coinduct_prem_concl ctxt Xss fpTss rs' n udiscs uselss vdiscs vselss ctrXs_Tss =
+  @{map 6} (mk_coinduct_prem_ctr_concls ctxt Xss fpTss rs' n)
+    (1 upto n) udiscs uselss vdiscs vselss ctrXs_Tss
+  |> flat |> Library.foldr1 HOLogic.mk_conj
+  handle List.Empty => @{term True};
+
+fun mk_coinduct_prem ctxt Xss fpTss rs' uvr u v n udiscs uselss vdiscs vselss ctrXs_Tss =
+  fold_rev Logic.all [u, v] (Logic.mk_implies (HOLogic.mk_Trueprop uvr,
+    HOLogic.mk_Trueprop (mk_coinduct_prem_concl ctxt Xss fpTss rs' n udiscs uselss vdiscs vselss
+      ctrXs_Tss)));
+
 fun postproc_co_induct ctxt nn prop prop_conj =
   Drule.zero_var_indexes
   #> `(conj_dests nn)
@@ -1616,7 +1712,7 @@ fun mk_induct_attrs ctrss =
   let val induct_cases = quasi_unambiguous_case_names (maps (map name_of_ctr) ctrss);
   in [Attrib.case_names induct_cases] end;
 
-fun derive_rel_induct_thms_for_types lthy nn fpA_Ts As Bs ctrAss ctrAs_Tsss exhausts ctor_rel_induct
+fun derive_rel_induct_thms_for_types ctxt nn fpA_Ts As Bs ctrAss ctrAs_Tsss exhausts ctor_rel_induct
     ctor_defss ctor_injects pre_rel_defs abs_inverses live_nesting_rel_eqs =
   let
     val B_ify_T = Term.typ_subst_atomic (As ~~ Bs);
@@ -1626,7 +1722,7 @@ fun derive_rel_induct_thms_for_types lthy nn fpA_Ts As Bs ctrAss ctrAs_Tsss exha
     val ctrBs_Tsss = map (map (map B_ify_T)) ctrAs_Tsss;
     val ctrBss = map (map B_ify) ctrAss;
 
-    val ((((Rs, IRs), ctrAsss), ctrBsss), names_lthy) = lthy
+    val ((((Rs, IRs), ctrAsss), ctrBsss), names_ctxt) = ctxt
       |> mk_Frees "R" (map2 mk_pred2T As Bs)
       ||>> mk_Frees "IR" (map2 mk_pred2T fpA_Ts fpB_Ts)
       ||>> mk_Freesss "a" ctrAs_Tsss
@@ -1636,30 +1732,30 @@ fun derive_rel_induct_thms_for_types lthy nn fpA_Ts As Bs ctrAss ctrAs_Tsss exha
       let
         fun mk_prem ctrA ctrB argAs argBs =
           fold_rev Logic.all (argAs @ argBs) (fold_rev (curry Logic.mk_implies)
-            (map2 (HOLogic.mk_Trueprop oo build_rel_app names_lthy (Rs @ IRs) fpA_Ts) argAs argBs)
-            (HOLogic.mk_Trueprop (build_rel_app names_lthy (Rs @ IRs) fpA_Ts
+            (map2 (HOLogic.mk_Trueprop oo build_rel_app names_ctxt (Rs @ IRs) fpA_Ts) argAs argBs)
+            (HOLogic.mk_Trueprop (build_rel_app names_ctxt (Rs @ IRs) fpA_Ts
               (Term.list_comb (ctrA, argAs)) (Term.list_comb (ctrB, argBs)))));
       in
         flat (@{map 4} (@{map 4} mk_prem) ctrAss ctrBss ctrAsss ctrBsss)
       end;
 
     val goal = HOLogic.mk_Trueprop (Library.foldr1 HOLogic.mk_conj (map2 mk_leq
-      (map2 (build_the_rel lthy (Rs @ IRs) []) fpA_Ts fpB_Ts) IRs));
-    val vars = Variable.add_free_names lthy goal [];
+      (map2 (build_the_rel ctxt (Rs @ IRs) []) fpA_Ts fpB_Ts) IRs));
+    val vars = Variable.add_free_names ctxt goal [];
 
     val rel_induct0_thm =
-      Goal.prove_sorry lthy vars prems goal (fn {context = ctxt, prems} =>
+      Goal.prove_sorry ctxt vars prems goal (fn {context = ctxt, prems} =>
         mk_rel_induct0_tac ctxt ctor_rel_induct prems (map (Thm.cterm_of ctxt) IRs) exhausts
           ctor_defss ctor_injects pre_rel_defs abs_inverses live_nesting_rel_eqs)
       |> Thm.close_derivation;
   in
-    (postproc_co_induct lthy nn @{thm predicate2D} @{thm predicate2D_conj} rel_induct0_thm,
+    (postproc_co_induct ctxt nn @{thm predicate2D} @{thm predicate2D_conj} rel_induct0_thm,
      mk_induct_attrs ctrAss)
   end;
 
 fun derive_induct_recs_thms_for_types plugins pre_bnfs rec_args_typess ctor_induct ctor_rec_thms
-    live_nesting_bnfs fp_nesting_bnfs fpTs Cs Xs ctrXs_Tsss fp_abs_inverses fp_type_definitions
-    abs_inverses ctrss ctr_defss recs rec_defs lthy =
+    live_nesting_bnfs fp_nesting_bnfs fpTs Cs Xs ctrXs_Tsss pre_abs_inverses pre_type_definitions
+    abs_inverses ctrss ctr_defss recs rec_defs ctxt =
   let
     val ctr_Tsss = map (map (binder_types o fastype_of)) ctrss;
 
@@ -1675,81 +1771,33 @@ fun derive_induct_recs_thms_for_types plugins pre_bnfs rec_args_typess ctor_indu
 
     val fp_b_names = map base_name_of_typ fpTs;
 
-    val ((((ps, ps'), xsss), us'), names_lthy) = lthy
-      |> mk_Frees' "P" (map mk_pred1T fpTs)
+    val (((ps, xsss), us'), names_ctxt) = ctxt
+      |> mk_Frees "P" (map mk_pred1T fpTs)
       ||>> mk_Freesss "x" ctr_Tsss
       ||>> Variable.variant_fixes fp_b_names;
 
     val us = map2 (curry Free) us' fpTs;
 
-    fun mk_sets bnf =
-      let
-        val Type (T_name, Us) = T_of_bnf bnf;
-        val lives = lives_of_bnf bnf;
-        val sets = sets_of_bnf bnf;
-        fun mk_set U =
-          (case find_index (curry (op =) U) lives of
-            ~1 => Term.dummy
-          | i => nth sets i);
-      in
-        (T_name, map mk_set Us)
-      end;
-
-    val setss_fp_nesting = map mk_sets fp_nesting_bnfs;
+    val setss_fp_nesting = map mk_bnf_sets fp_nesting_bnfs;
 
     val (induct_thms, induct_thm) =
       let
-        fun mk_raw_prem_prems _ (x as Free (_, Type _)) (X as TFree _) =
-            [([], (find_index (curry (op =) X) Xs + 1, x))]
-          | mk_raw_prem_prems names_lthy (x as Free (s, Type (T_name, Ts0))) (Type (_, Xs_Ts0)) =
-            (case AList.lookup (op =) setss_fp_nesting T_name of
-              NONE => []
-            | SOME raw_sets0 =>
-              let
-                val (Xs_Ts, (Ts, raw_sets)) =
-                  filter (exists_subtype_in Xs o fst) (Xs_Ts0 ~~ (Ts0 ~~ raw_sets0))
-                  |> split_list ||> split_list;
-                val sets = map (mk_set Ts0) raw_sets;
-                val (ys, names_lthy') = names_lthy |> mk_Frees s Ts;
-                val xysets = map (pair x) (ys ~~ sets);
-                val ppremss = map2 (mk_raw_prem_prems names_lthy') ys Xs_Ts;
-              in
-                flat (map2 (map o apfst o cons) xysets ppremss)
-              end)
-          | mk_raw_prem_prems _ _ _ = [];
-
-        fun close_prem_prem xs t =
-          fold_rev Logic.all (map Free (drop (nn + length xs)
-            (rev (Term.add_frees t (map dest_Free xs @ ps'))))) t;
-
-        fun mk_prem_prem xs (xysets, (j, x)) =
-          close_prem_prem xs (Logic.list_implies (map (fn (x', (y, set)) =>
-              mk_Trueprop_mem (y, set $ x')) xysets,
-            HOLogic.mk_Trueprop (nth ps (j - 1) $ x)));
-
-        fun mk_raw_prem phi ctr ctr_Ts ctrXs_Ts =
-          let
-            val (xs, names_lthy') = names_lthy |> mk_Frees "x" ctr_Ts;
-            val pprems = flat (map2 (mk_raw_prem_prems names_lthy') xs ctrXs_Ts);
-          in (xs, pprems, HOLogic.mk_Trueprop (phi $ Term.list_comb (ctr, xs))) end;
-
-        fun mk_prem (xs, raw_pprems, concl) =
-          fold_rev Logic.all xs (Logic.list_implies (map (mk_prem_prem xs) raw_pprems, concl));
-
-        val raw_premss = @{map 4} (@{map 3} o mk_raw_prem) ps ctrss ctr_Tsss ctrXs_Tsss;
-
+        val raw_premss = @{map 4} (@{map 3}
+            o mk_induct_raw_prem I names_ctxt (map single Xs) setss_fp_nesting)
+          ps ctrss ctr_Tsss ctrXs_Tsss;
+        val concl =
+          HOLogic.mk_Trueprop (Library.foldr1 HOLogic.mk_conj (map2 (curry (op $)) ps us));
         val goal =
-          Library.foldr (Logic.list_implies o apfst (map mk_prem)) (raw_premss,
-            HOLogic.mk_Trueprop (Library.foldr1 HOLogic.mk_conj (map2 (curry (op $)) ps us)));
-        val vars = Variable.add_free_names lthy goal [];
-
+          Library.foldr (Logic.list_implies o apfst (map (finish_induct_prem ctxt nn ps)))
+            (raw_premss, concl);
+        val vars = Variable.add_free_names ctxt goal [];
         val kksss = map (map (map (fst o snd) o #2)) raw_premss;
 
-        val ctor_induct' = ctor_induct OF (map2 mk_absumprodE fp_type_definitions mss);
+        val ctor_induct' = ctor_induct OF (map2 mk_absumprodE pre_type_definitions mss);
 
         val thm =
-          Goal.prove_sorry lthy vars [] goal (fn {context = ctxt, ...} =>
-            mk_induct_tac ctxt nn ns mss kksss (flat ctr_defss) ctor_induct' fp_abs_inverses
+          Goal.prove_sorry ctxt vars [] goal (fn {context = ctxt, ...} =>
+            mk_induct_tac ctxt nn ns mss kksss (flat ctr_defss) ctor_induct' pre_abs_inverses
               abs_inverses fp_nesting_set_maps pre_set_defss)
           |> Thm.close_derivation;
       in
@@ -1781,7 +1829,7 @@ fun derive_induct_recs_thms_for_types plugins pre_bnfs rec_args_typess ctor_indu
                 indexify (perhaps (try (snd o HOLogic.dest_prodT)) o snd) Cs
                   (fn kk => fn TU => maybe_tick TU (nth us kk) (nth frecs kk));
             in
-              build_map lthy [] build_simple (T, U) $ x
+              build_map ctxt [] [] build_simple (T, U) $ x
             end;
 
         val fxsss = map2 (map2 (flat_rec_arg_args oo map2 (map o build_rec))) xsss x_Tssss;
@@ -1789,10 +1837,10 @@ fun derive_induct_recs_thms_for_types plugins pre_bnfs rec_args_typess ctor_indu
 
         val tacss = @{map 4} (map ooo
               mk_rec_tac pre_map_defs (fp_nesting_map_ident0s @ live_nesting_map_ident0s) rec_defs)
-            ctor_rec_thms fp_abs_inverses abs_inverses ctr_defss;
+            ctor_rec_thms pre_abs_inverses abs_inverses ctr_defss;
 
         fun prove goal tac =
-          Goal.prove_sorry lthy [] [] goal (tac o #context)
+          Goal.prove_sorry ctxt [] [] goal (tac o #context)
           |> Thm.close_derivation;
       in
         map2 (map2 prove) goalss tacss
@@ -1837,7 +1885,7 @@ fun mk_coinduct_attrs fpTs ctrss discss mss =
     (coinduct_attrs, common_coinduct_attrs)
   end;
 
-fun derive_rel_coinduct_thms_for_types lthy nn fpA_Ts ns As Bs mss (ctr_sugars : ctr_sugar list)
+fun derive_rel_coinduct_thms_for_types ctxt nn fpA_Ts ns As Bs mss (ctr_sugars : ctr_sugar list)
     abs_inverses abs_injects ctor_injects dtor_ctors rel_pre_defs ctor_defss dtor_rel_coinduct
     live_nesting_rel_eqs =
   let
@@ -1847,14 +1895,14 @@ fun derive_rel_coinduct_thms_for_types lthy nn fpA_Ts ns As Bs mss (ctr_sugars :
     val (Rs, IRs, fpAs, fpBs, _) =
       let
         val fp_names = map base_name_of_typ fpA_Ts;
-        val ((((Rs, IRs), fpAs_names), fpBs_names), names_lthy) = lthy
+        val ((((Rs, IRs), fpAs_names), fpBs_names), names_ctxt) = ctxt
           |> mk_Frees "R" (map2 mk_pred2T As Bs)
           ||>> mk_Frees "IR" (map2 mk_pred2T fpA_Ts fpB_Ts)
           ||>> Variable.variant_fixes fp_names
           ||>> Variable.variant_fixes (map (suffix "'") fp_names);
       in
         (Rs, IRs, map2 (curry Free) fpAs_names fpA_Ts, map2 (curry Free) fpBs_names fpB_Ts,
-         names_lthy)
+         names_ctxt)
       end;
 
     val ((discA_tss, selA_tsss), (discB_tss, selB_tsss)) =
@@ -1880,7 +1928,7 @@ fun derive_rel_coinduct_thms_for_types lthy nn fpA_Ts ns As Bs mss (ctr_sugars :
             [Library.foldr HOLogic.mk_imp
               (if n = 1 then [] else [discA_t, discB_t],
                Library.foldr1 HOLogic.mk_conj
-                 (map2 (build_rel_app lthy (Rs @ IRs) fpA_Ts) selA_ts selB_ts))]);
+                 (map2 (build_rel_app ctxt (Rs @ IRs) fpA_Ts) selA_ts selB_ts))]);
 
         fun mk_prem_concl n discA_ts selA_tss discB_ts selB_tss =
           Library.foldr1 HOLogic.mk_conj (flat (@{map 5} (mk_prem_ctr_concls n)
@@ -1895,22 +1943,22 @@ fun derive_rel_coinduct_thms_for_types lthy nn fpA_Ts ns As Bs mss (ctr_sugars :
       end;
 
     val goal = HOLogic.mk_Trueprop (Library.foldr1 HOLogic.mk_conj (map2 mk_leq
-      IRs (map2 (build_the_rel lthy (Rs @ IRs) []) fpA_Ts fpB_Ts)));
-    val vars = Variable.add_free_names lthy goal [];
+      IRs (map2 (build_the_rel ctxt (Rs @ IRs) []) fpA_Ts fpB_Ts)));
+    val vars = Variable.add_free_names ctxt goal [];
 
     val rel_coinduct0_thm =
-      Goal.prove_sorry lthy vars prems goal (fn {context = ctxt, prems} =>
+      Goal.prove_sorry ctxt vars prems goal (fn {context = ctxt, prems} =>
         mk_rel_coinduct0_tac ctxt dtor_rel_coinduct (map (Thm.cterm_of ctxt) IRs) prems
           (map #exhaust ctr_sugars) (map (flat o #disc_thmss) ctr_sugars)
           (map (flat o #sel_thmss) ctr_sugars) ctor_defss dtor_ctors ctor_injects abs_injects
           rel_pre_defs abs_inverses live_nesting_rel_eqs)
       |> Thm.close_derivation;
   in
-    (postproc_co_induct lthy nn @{thm predicate2D} @{thm predicate2D_conj} rel_coinduct0_thm,
+    (postproc_co_induct ctxt nn @{thm predicate2D} @{thm predicate2D_conj} rel_coinduct0_thm,
      mk_coinduct_attrs fpA_Ts (map #ctrs ctr_sugars) (map #discs ctr_sugars) mss)
   end;
 
-fun derive_set_induct_thms_for_types lthy nn fpTs ctrss setss dtor_set_inducts exhausts set_pre_defs
+fun derive_set_induct_thms_for_types ctxt nn fpTs ctrss setss dtor_set_inducts exhausts set_pre_defs
     ctor_defs dtor_ctors Abs_pre_inverses =
   let
     fun mk_prems A Ps ctr_args t ctxt =
@@ -1979,9 +2027,9 @@ fun derive_set_induct_thms_for_types lthy nn fpTs ctrss setss dtor_set_inducts e
           |>> apfst (apsnd (Library.foldr1 HOLogic.mk_conj))
           |>> apsnd flat;
 
-        val vars = fold (Variable.add_free_names lthy) (concl :: prems) [];
+        val vars = fold (Variable.add_free_names ctxt) (concl :: prems) [];
         val thm =
-          Goal.prove_sorry lthy vars prems (HOLogic.mk_Trueprop concl)
+          Goal.prove_sorry ctxt vars prems (HOLogic.mk_Trueprop concl)
             (fn {context = ctxt, prems} =>
                mk_set_induct0_tac ctxt (map (Thm.cterm_of ctxt'') Ps) prems dtor_set_inducts
                  exhausts set_pre_defs ctor_defs dtor_ctors Abs_pre_inverses)
@@ -1994,7 +2042,7 @@ fun derive_set_induct_thms_for_types lthy nn fpTs ctrss setss dtor_set_inducts e
       end
     val consumes_attr = Attrib.consumes 1;
   in
-    map (mk_thm lthy fpTs ctrss
+    map (mk_thm ctxt fpTs ctrss
         #> nn = 1 ? map_prod (fn thm => rotate_prems ~1 (thm RS bspec)) (cons consumes_attr))
       (transpose setss)
   end;
@@ -2018,9 +2066,9 @@ fun mk_coinduct_strong_thm coind rel_eqs rel_monos mk_vimage2p ctxt =
     |> unfold_thms ctxt unfolds
   end;
 
-fun derive_coinduct_thms_for_types strong alter_r pre_bnfs dtor_coinduct dtor_ctors
-    live_nesting_bnfs fpTs Xs ctrXs_Tsss ns fp_abs_inverses abs_inverses mk_vimage2p ctr_defss
-    (ctr_sugars : ctr_sugar list) ctxt =
+fun derive_coinduct_thms_for_types ctxt strong alter_r pre_bnfs dtor_coinduct dtor_ctors
+    live_nesting_bnfs fpTs Xs ctrXs_Tsss ns pre_abs_inverses abs_inverses mk_vimage2p ctr_defss
+    (ctr_sugars : ctr_sugar list) =
   let
     val nn = length pre_bnfs;
 
@@ -2054,45 +2102,23 @@ fun derive_coinduct_thms_for_types strong alter_r pre_bnfs dtor_coinduct dtor_ct
       @{map 4} (fn u => fn v => fn uvr => fn uv_eq =>
         fold_rev Term.lambda [u, v] (HOLogic.mk_disj (uvr, uv_eq))) us vs uvrs uv_eqs;
 
-    fun build_the_rel rs' T Xs_T =
-      build_rel [] ctxt [] (fn (_, X) => nth rs' (find_index (curry (op =) X) Xs)) (T, Xs_T)
-      |> Term.subst_atomic_types (Xs ~~ fpTs);
-
-    fun build_rel_app rs' usel vsel Xs_T =
-      fold rapp [usel, vsel] (build_the_rel rs' (fastype_of usel) Xs_T);
-
-    fun mk_prem_ctr_concls rs' n k udisc usels vdisc vsels ctrXs_Ts =
-      (if k = n then [] else [HOLogic.mk_eq (udisc, vdisc)]) @
-      (if null usels then
-         []
-       else
-         [Library.foldr HOLogic.mk_imp (if n = 1 then [] else [udisc, vdisc],
-            Library.foldr1 HOLogic.mk_conj (@{map 3} (build_rel_app rs') usels vsels ctrXs_Ts))]);
-
-    fun mk_prem_concl rs' n udiscs uselss vdiscs vselss ctrXs_Tss =
-      flat (@{map 6} (mk_prem_ctr_concls rs' n) (1 upto n) udiscs uselss vdiscs vselss ctrXs_Tss)
-      |> Library.foldr1 HOLogic.mk_conj
-      handle List.Empty => @{term True};
-
-    fun mk_prem rs' uvr u v n udiscs uselss vdiscs vselss ctrXs_Tss =
-      fold_rev Logic.all [u, v] (Logic.mk_implies (HOLogic.mk_Trueprop uvr,
-        HOLogic.mk_Trueprop (mk_prem_concl rs' n udiscs uselss vdiscs vselss ctrXs_Tss)));
-
     val concl =
       HOLogic.mk_Trueprop (Library.foldr1 HOLogic.mk_conj
         (@{map 3} (fn uvr => fn u => fn v => HOLogic.mk_imp (uvr, HOLogic.mk_eq (u, v)))
-           uvrs us vs));
+           uvrs us vs))
 
     fun mk_goal rs0' =
-      Logic.list_implies (@{map 9} (mk_prem (map alter_r rs0')) uvrs us vs ns udiscss uselsss
-        vdiscss vselsss ctrXs_Tsss, concl);
+      Logic.list_implies (@{map 9} (mk_coinduct_prem ctxt (map single Xs) (map single fpTs)
+            (map alter_r rs0'))
+          uvrs us vs ns udiscss uselsss vdiscss vselsss ctrXs_Tsss,
+        concl);
 
     val goals = map mk_goal ([rs] @ (if strong then [strong_rs] else []));
 
     fun prove dtor_coinduct' goal =
       Variable.add_free_names ctxt goal []
       |> (fn vars => Goal.prove_sorry ctxt vars [] goal (fn {context = ctxt, ...} =>
-        mk_coinduct_tac ctxt live_nesting_rel_eqs nn ns dtor_coinduct' pre_rel_defs fp_abs_inverses
+        mk_coinduct_tac ctxt live_nesting_rel_eqs nn ns dtor_coinduct' pre_rel_defs pre_abs_inverses
           abs_inverses dtor_ctors exhausts ctr_defss disc_thmsss sel_thmsss))
       |> Thm.close_derivation;
 
@@ -2107,10 +2133,10 @@ fun derive_coinduct_thms_for_types strong alter_r pre_bnfs dtor_coinduct dtor_ct
       dtor_coinducts goals
   end;
 
-fun derive_coinduct_corecs_thms_for_types pre_bnfs (x, cs, cpss, (((pgss, _, _, _), cqgsss), _))
-    dtor_coinduct dtor_injects dtor_ctors dtor_corec_thms live_nesting_bnfs fpTs Cs Xs ctrXs_Tsss
-    kss mss ns fp_abs_inverses abs_inverses mk_vimage2p ctr_defss (ctr_sugars : ctr_sugar list)
-    corecs corec_defs ctxt =
+fun derive_coinduct_corecs_thms_for_types ctxt pre_bnfs
+    (x, cs, cpss, (((pgss, _, _, _), cqgsss), _)) dtor_coinduct dtor_injects dtor_ctors
+    dtor_corec_thms live_nesting_bnfs fpTs Cs Xs ctrXs_Tsss kss mss ns pre_abs_inverses abs_inverses
+    mk_vimage2p ctr_defss (ctr_sugars : ctr_sugar list) corecs corec_defs =
   let
     fun mk_ctor_dtor_corec_thm dtor_inject dtor_ctor corec =
       iffD1 OF [dtor_inject, trans OF [corec, dtor_ctor RS sym]];
@@ -2130,9 +2156,9 @@ fun derive_coinduct_corecs_thms_for_types pre_bnfs (x, cs, cpss, (((pgss, _, _, 
     val discIss = map #discIs ctr_sugars;
     val sel_thmsss = map #sel_thmss ctr_sugars;
 
-    val coinduct_thms_pairs = derive_coinduct_thms_for_types true I pre_bnfs dtor_coinduct
-      dtor_ctors live_nesting_bnfs fpTs Xs ctrXs_Tsss ns fp_abs_inverses abs_inverses mk_vimage2p
-      ctr_defss ctr_sugars ctxt;
+    val coinduct_thms_pairs = derive_coinduct_thms_for_types ctxt true I pre_bnfs dtor_coinduct
+      dtor_ctors live_nesting_bnfs fpTs Xs ctrXs_Tsss ns pre_abs_inverses abs_inverses mk_vimage2p
+      ctr_defss ctr_sugars;
 
     fun mk_maybe_not pos = not pos ? HOLogic.mk_not;
 
@@ -2166,7 +2192,7 @@ fun derive_coinduct_corecs_thms_for_types pre_bnfs (x, cs, cpss, (((pgss, _, _, 
                   indexify fst (map2 (curry mk_sumT) fpTs Cs)
                     (fn kk => fn _ => tack (nth cs kk, nth us kk) (nth gcorecs kk));
               in
-                build_map ctxt [] build_simple (T, U) $ cqg
+                build_map ctxt [] [] build_simple (T, U) $ cqg
               end
             else
               cqg
@@ -2579,7 +2605,7 @@ fun define_co_datatypes prepare_plugins prepare_constraint prepare_typ prepare_t
 
           fun mk_rec_arg_arg (x as Free (_, T)) =
             let val U = B_ify_T T in
-              if T = U then x else build_map lthy [] (the o AList.lookup (op =) ABfs) (T, U) $ x
+              if T = U then x else build_map lthy [] [] (the o AList.lookup (op =) ABfs) (T, U) $ x
             end;
 
           fun mk_rec_o_map_arg rec_arg_T h =
@@ -2732,8 +2758,10 @@ fun define_co_datatypes prepare_plugins prepare_constraint prepare_typ prepare_t
               val T = range_type (fastype_of g);
               val U = range_type corec_argB_T;
             in
-              if T = U then g
-              else HOLogic.mk_comp (build_map lthy2 [] (the o AList.lookup (op =) ABfs) (T, U), g)
+              if T = U then
+                g
+              else
+                HOLogic.mk_comp (build_map lthy2 [] [] (the o AList.lookup (op =) ABfs) (T, U), g)
             end;
 
           fun mk_map_o_corec_rhs corecx =
@@ -2769,9 +2797,9 @@ fun define_co_datatypes prepare_plugins prepare_constraint prepare_typ prepare_t
               (coinduct_attrs, common_coinduct_attrs)),
              corec_thmss, corec_disc_thmss,
              (corec_disc_iff_thmss, corec_disc_iff_attrs), (corec_sel_thmsss, corec_sel_attrs)) =
-          derive_coinduct_corecs_thms_for_types pre_bnfs (the corecs_args_types) xtor_co_induct
+          derive_coinduct_corecs_thms_for_types lthy pre_bnfs (the corecs_args_types) xtor_co_induct
             dtor_injects dtor_ctors xtor_co_rec_thms live_nesting_bnfs fpTs Cs Xs ctrXs_Tsss kss mss
-            ns abs_inverses abs_inverses I ctr_defss ctr_sugars corecs corec_defs lthy;
+            ns abs_inverses abs_inverses I ctr_defss ctr_sugars corecs corec_defs;
 
         fun distinct_prems ctxt thm =
           Goal.prove (*no sorry*) ctxt [] []

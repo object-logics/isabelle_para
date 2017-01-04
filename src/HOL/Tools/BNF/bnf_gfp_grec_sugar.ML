@@ -23,10 +23,10 @@ sig
   val derive_unique: Proof.context -> morphism -> term -> BNF_GFP_Grec.corec_info -> string ->
     thm -> thm
 
-  val corec_cmd: corec_option list -> (binding * string option * mixfix) list * string ->
+  val corec_cmd: bool -> corec_option list -> (binding * string option * mixfix) list * string ->
     local_theory -> local_theory
-  val corecursive_cmd: corec_option list -> (binding * string option * mixfix) list * string ->
-    local_theory -> Proof.state
+  val corecursive_cmd: bool -> corec_option list ->
+    (binding * string option * mixfix) list * string -> local_theory -> Proof.state
   val friend_of_corec_cmd: (string * string option) * string -> local_theory -> Proof.state
   val coinduction_upto_cmd: string * string -> local_theory -> local_theory
 end;
@@ -86,14 +86,6 @@ fun unfold_id_bnf_etc lthy =
     Raw_Simplifier.rewrite_term thy unfold_id_thms1 []
     #> Raw_Simplifier.rewrite_term thy @{thms BNF_Composition.id_bnf_def} []
   end;
-
-fun unexpected_corec_call ctxt eqns t =
-  error_at ctxt eqns ("Unexpected corecursive call in " ^ quote (Syntax.string_of_term ctxt t));
-fun unsupported_case_around_corec_call ctxt eqns t =
-  error_at ctxt eqns ("Unsupported corecursive call under case expression " ^
-    quote (Syntax.string_of_term ctxt t) ^ "\n(Define " ^
-    quote (Syntax.string_of_typ ctxt (domain_type (fastype_of t))) ^
-    " with  discriminators and selectors to circumvent this limitation.)");
 
 datatype corec_option =
   Plugins_Option of Proof.context -> Plugin_Name.filter |
@@ -587,7 +579,7 @@ fun mk_cong_intro_ctr_or_friend_goal ctxt fpT Rcong alg =
       ||>> mk_Frees "y" xy_Ts;
 
     fun mk_prem xy_T x y =
-      build_rel [] ctxt [fpT] (fn (T, _) => if T = fpT then Rcong else HOLogic.eq_const T)
+      build_rel [] ctxt [fpT] [] (fn (T, _) => if T = fpT then Rcong else HOLogic.eq_const T)
         (xy_T, xy_T) $ x $ y;
 
     val prems = @{map 3} mk_prem xy_Ts xs ys;
@@ -685,9 +677,9 @@ fun derive_coinduct ctxt (fpT as Type (fpT_name, fpT_args)) dtor_coinduct =
     fun mk_applied_cong arg =
       enforce_type ctxt domain_type (fastype_of arg) cong0 $ arg;
 
-    val thm = derive_coinduct_thms_for_types false mk_applied_cong [pre_bnf] dtor_coinduct
+    val thm = derive_coinduct_thms_for_types ctxt false mk_applied_cong [pre_bnf] dtor_coinduct
         dtor_ctors live_nesting_bnfs [fpT] [substXAT X] [map (map substXAT) ctrXs_Tss] [n]
-        [abs_inverse] [abs_inverse] I [ctr_defs] [morph_ctr_sugar phi ctr_sugar0] ctxt
+        [abs_inverse] [abs_inverse] I [ctr_defs] [morph_ctr_sugar phi ctr_sugar0]
       |> map snd |> the_single;
     val (attrs, _) = mk_coinduct_attrs [fpT] [ctrs0] [discs0] [ms];
   in
@@ -713,7 +705,7 @@ fun explore_nested lthy explore {bound_Us, bound_Ts, U, T} t =
         |> explore {bound_Us = T :: bound_Us, bound_Ts = T :: bound_Ts, U = U, T = T}
         |> (fn t => Abs (Name.uu, T, t));
   in
-    betapply (build_map lthy [] build_simple (T, U), t)
+    betapply (build_map lthy [] [] build_simple (T, U), t)
   end;
 
 fun add_boundvar t = betapply (incr_boundvars 1 t, Bound 0);
@@ -754,43 +746,24 @@ fun check_corec_equation ctxt fun_frees (lhs, rhs) =
 
     fun check_fun_name () =
       null fun_frees orelse member (op aconv) fun_frees fun_t orelse
-      error (quote (Syntax.string_of_term ctxt fun_t) ^
-        " is not the function currently being defined");
-
-    fun check_args_are_vars () =
-      let
-        fun is_ok_Free_or_Var (Free (s, _)) = not (String.isSuffix inner_fp_suffix s)
-          | is_ok_Free_or_Var (Var _) = true
-          | is_ok_Free_or_Var _ = false;
-
-        fun is_valid arg =
-          (is_ok_Free_or_Var arg andalso not (member (op aconv) fun_frees arg)) orelse
-          error ("Argument " ^ quote (Syntax.string_of_term ctxt arg) ^ " is not free");
-      in
-        forall is_valid arg_ts
-      end;
-
-    fun check_no_duplicate_arg () =
-      (case duplicates (op =) arg_ts of
-        [] => ()
-      | arg :: _ => error ("Repeated argument: " ^ quote (Syntax.string_of_term ctxt arg)));
+      ill_formed_equation_head ctxt [] fun_t;
 
     fun check_no_other_frees () =
       (case Term.add_frees rhs [] |> map Free |> subtract (op =) (fun_frees @ arg_ts)
-          |> filter_out (Variable.is_fixed ctxt o fst o dest_Free) of
-        [] => ()
-      | Free (s, _) :: _ => error ("Extra variable on right-hand side: " ^ quote s));
+          |> find_first (not o Variable.is_fixed ctxt o fst o dest_Free) of
+        NONE => ()
+      | SOME t => extra_variable_in_rhs ctxt [] t);
   in
-    check_no_duplicate_arg ();
+    check_duplicate_variables_in_lhs ctxt [] arg_ts;
     check_fun_name ();
-    check_args_are_vars ();
+    check_all_fun_arg_frees ctxt [] (filter_out is_Var arg_ts);
     check_no_other_frees ()
   end;
 
 fun parse_corec_equation ctxt fun_frees eq =
   let
     val (lhs, rhs) = HOLogic.dest_eq (HOLogic.dest_Trueprop (drop_all eq))
-      handle TERM _ => error "Expected HOL equation";
+      handle TERM _ => ill_formed_equation_lhs_rhs ctxt [eq];
 
     val _ = check_corec_equation ctxt fun_frees (lhs, rhs);
 
@@ -1047,7 +1020,7 @@ fun extract_rho_from_equation
         val param2_T = Type_Infer.paramify_vars param1_T;
 
         val deadfixed_T =
-          build_map lthy [] (mk_undefined o op -->) (apply2 tupleT_of_funT (param1_T, param2_T))
+          build_map lthy [] [] (mk_undefined o op -->) (apply2 tupleT_of_funT (param1_T, param2_T))
           |> singleton (Type_Infer_Context.infer_types lthy)
           |> singleton (Type_Infer.fixate lthy false)
           |> type_of
@@ -1159,24 +1132,34 @@ fun extract_rho_from_equation
                 |> `(curry fastype_of1 bound_Ts)
                 |>> build_params bound_Us bound_Ts
                 |-> explore;
-              val Us = map (fpT_to ssig_T) (snd (dest_Type (fastype_of1 (bound_Us, mapped_arg'))));
-              val temporary_map = map_tm
-                |> mk_map n Us Ts;
-              val map_fn_Ts = fastype_of #> strip_fun_type #> fst;
-              val binder_Uss = map_fn_Ts temporary_map
-                |> map (map (fpT_to ssig_T) o binder_types);
-              val fun_paramss = map_fn_Ts (head_of func)
-                |> map (build_params bound_Us bound_Ts);
-              val fs' = fs |> @{map 4} explore_fun binder_Uss (replicate n explore) fun_paramss;
-              val SOME bnf = bnf_of lthy T_name;
-              val Type (_, bnf_Ts) = T_of_bnf bnf;
-              val typ_alist =
-                lives_of_bnf bnf ~~ map (curry fastype_of1 bound_Us #> range_type) fs';
-              val Us' = map2 the_default Us (map (AList.lookup (op =) typ_alist) bnf_Ts);
-              val map_tm' = map_tm |> mk_map n Us Us';
             in
-              build_function_after_encapsulation func (list_comb (map_tm', fs')) params [mapped_arg]
-                [mapped_arg']
+              (case fastype_of1 (bound_Us, mapped_arg') of
+                Type (U_name, Us0) =>
+                if U_name = T_name then
+                  let
+                    val Us = map (fpT_to ssig_T) Us0;
+                    val temporary_map = map_tm
+                      |> mk_map n Us Ts;
+                    val map_fn_Ts = fastype_of #> strip_fun_type #> fst;
+                    val binder_Uss = map_fn_Ts temporary_map
+                      |> map (map (fpT_to ssig_T) o binder_types);
+                    val fun_paramss = map_fn_Ts (head_of func)
+                      |> map (build_params bound_Us bound_Ts);
+                    val fs' = fs
+                      |> @{map 4} explore_fun binder_Uss (replicate n explore) fun_paramss;
+                    val SOME bnf = bnf_of lthy T_name;
+                    val Type (_, bnf_Ts) = T_of_bnf bnf;
+                    val typ_alist =
+                      lives_of_bnf bnf ~~ map (curry fastype_of1 bound_Us #> range_type) fs';
+                    val Us' = map2 the_default Us (map (AList.lookup (op =) typ_alist) bnf_Ts);
+                    val map_tm' = map_tm |> mk_map n Us Us';
+                  in
+                    build_function_after_encapsulation func (list_comb (map_tm', fs')) params
+                      [mapped_arg] [mapped_arg']
+                  end
+                else
+                  explore params t
+              | _ => explore params t)
             end
           | NONE => explore params t)
       | massage_map explore params t = explore params t;
@@ -1526,10 +1509,7 @@ fun extract_rho_from_equation
         | NONE => explore params t)
       | _ => explore params t)
     and explore_cond params t =
-      if has_self_call t then
-        error ("Unallowed corecursive call in condition " ^ quote (Syntax.string_of_term lthy t))
-      else
-        explore_inner params t
+      if has_self_call t then unexpected_rec_call_in lthy [] t else explore_inner params t
     and explore_inner params t =
       massage_rho explore_inner_general params t
     and explore_inner_general (params as {bound_Us, bound_Ts, T, ...}) t =
@@ -1550,7 +1530,7 @@ fun extract_rho_from_equation
                 disc' $ arg'
               else
                 error ("Discriminator " ^ quote (Syntax.string_of_term lthy fun_t) ^
-                  " cannot be applied to non-lhs argument " ^
+                  " cannot be applied to non-variable " ^
                   quote (Syntax.string_of_term lthy (hd arg_ts)))
             end
           | _ =>
@@ -1566,7 +1546,7 @@ fun extract_rho_from_equation
                   build_function_after_encapsulation fun_t sel' params arg_ts arg_ts'
                 else
                   error ("Selector " ^ quote (Syntax.string_of_term lthy fun_t) ^
-                    " cannot be applied to non-lhs argument " ^
+                    " cannot be applied to non-variable " ^
                     quote (Syntax.string_of_term lthy (hd arg_ts)))
               end
             | NONE =>
@@ -1605,8 +1585,7 @@ fun extract_rho_from_equation
         if is_some ctr_opt then
           rebuild_function_after_exploration fun_t (the ctr_opt) explore_inner params arg_ts
         else
-          error ("Constructor expected on right-hand side, " ^
-            quote (Syntax.string_of_term lthy fun_t) ^ " found instead")
+          not_constructor_in_rhs lthy [] fun_t
       end;
 
     val rho_rhs = rhs
@@ -1638,11 +1617,9 @@ fun mk_rho_parametricity_goal ctxt Y Z preT ssig_T dead_pre_rel dead_k_rel dead_
     HOLogic.mk_Trueprop (rho_rel $ rho_rhs $ rho_rhsZ)
   end;
 
-fun extract_rho_return_transfer_goals fun_b version dead_pre_bnf dead_k_bnf Y Z preT fun_T k_T
-    ssig_T ssig_fp_sugar friend_parse_info fun_t parsed_eq lthy =
+fun extract_rho_return_transfer_goals fun_b version dead_pre_bnf dead_k_bnf Y Z preT k_T ssig_T
+    ssig_fp_sugar friend_parse_info fun_t parsed_eq lthy =
   let
-    val Type (fpT_name, _) = body_type fun_T;
-
     fun mk_rel T bnf =
       let
         val ZT = Tsubst Y Z T;
@@ -1724,7 +1701,7 @@ fun explore_corec_equation ctxt could_be_friend friend fun_name fun_free
 
     fun massage_let_if_case_corec explore {bound_Ts, U, T, ...} t =
       massage_let_if_case ctxt has_self_call (fn bound_Ts => explore (build_params bound_Ts U T))
-        (K (unexpected_corec_call ctxt [t])) (K (unsupported_case_around_corec_call ctxt [t]))
+        (K (unexpected_corec_call_in ctxt [t])) (K (unsupported_case_around_corec_call ctxt [t]))
         bound_Ts t;
 
     val massage_map_let_if_case =
@@ -1985,7 +1962,7 @@ fun derive_and_update_coinduct_cong_intross [] = pair (false, [])
       else
         ((false, extras), lthy));
 
-fun prepare_corec_ursive_cmd long_cmd opts (raw_fixes, raw_eq) lthy =
+fun prepare_corec_ursive_cmd int long_cmd opts (raw_fixes, raw_eq) lthy =
   let
     val _ = can the_single raw_fixes orelse
       error "Mutually corecursive functions not supported";
@@ -1994,8 +1971,7 @@ fun prepare_corec_ursive_cmd long_cmd opts (raw_fixes, raw_eq) lthy =
     val ([((b, fun_T), mx)], [(_, eq)]) =
       fst (Specification.read_multi_specs raw_fixes [((Binding.empty_atts, raw_eq), [], [])] lthy);
 
-    val _ = Sign.of_sort (Proof_Context.theory_of lthy) (fun_T, @{sort type}) orelse
-      error ("Type of " ^ Binding.print b ^ " contains top sort");
+    val _ = check_top_sort lthy b fun_T;
 
     val (arg_Ts, res_T) = strip_type fun_T;
     val fpT_name = (case res_T of Type (s, _) => s | _ => not_codatatype lthy res_T);
@@ -2020,8 +1996,8 @@ fun prepare_corec_ursive_cmd long_cmd opts (raw_fixes, raw_eq) lthy =
         val parsed_eq' = parsed_eq ||> subst_atomic [(fun_free, fun_t)];
       in
         lthy
-        |> extract_rho_return_transfer_goals b version dead_pre_bnf dead_k_bnf Y Z preT fun_T k_T
-          ssig_T ssig_fp_sugar friend_parse_info fun_t parsed_eq'
+        |> extract_rho_return_transfer_goals b version dead_pre_bnf dead_k_bnf Y Z preT k_T ssig_T
+          ssig_fp_sugar friend_parse_info fun_t parsed_eq'
         |>> pair prepared
       end;
 
@@ -2080,6 +2056,7 @@ fun prepare_corec_ursive_cmd long_cmd opts (raw_fixes, raw_eq) lthy =
         val ((fun_t0, (_, fun_def0)), (lthy, lthy_old)) = lthy
           |> Local_Theory.open_target |> snd
           |> Local_Theory.define def
+          |> tap (fn (def, lthy) => print_def_consts int [def] lthy)
           ||> `Local_Theory.close_target;
 
         val parsed_eq = parse_corec_equation lthy [fun_free] eq;
@@ -2207,11 +2184,11 @@ fun prepare_corec_ursive_cmd long_cmd opts (raw_fixes, raw_eq) lthy =
         (inner_fp_triple, termin_goals), (const_transfers, const_transfer_goals'))), lthy)
   end;
 
-fun corec_cmd opts (raw_fixes, raw_eq) lthy =
+fun corec_cmd int opts (raw_fixes, raw_eq) lthy =
   let
     val ((def_fun, (_, (inner_fp_triple, termin_goals), (const_transfers, const_transfer_goals))),
          lthy) =
-      prepare_corec_ursive_cmd false opts (raw_fixes, raw_eq) lthy;
+      prepare_corec_ursive_cmd int false opts (raw_fixes, raw_eq) lthy;
   in
     if not (null termin_goals) then
       error ("Termination prover failed (try " ^ quote (#1 @{command_keyword corecursive}) ^
@@ -2223,11 +2200,11 @@ fun corec_cmd opts (raw_fixes, raw_eq) lthy =
       def_fun inner_fp_triple const_transfers [] lthy
   end;
 
-fun corecursive_cmd opts (raw_fixes, raw_eq) lthy =
+fun corecursive_cmd int opts (raw_fixes, raw_eq) lthy =
   let
     val ((def_fun, (([Type (fpT_name, _)], prepareds, rho_datas, rho_transfer_goals),
             (inner_fp_triple, termin_goals), (const_transfers, const_transfer_goals))), lthy) =
-      prepare_corec_ursive_cmd true opts (raw_fixes, raw_eq) lthy;
+      prepare_corec_ursive_cmd int true opts (raw_fixes, raw_eq) lthy;
 
     val (rho_transfer_goals', unprime_rho_transfer_and_folds) =
       @{map 3} (fn (_, _, _, _, _, _, _, _, _, _, _, _, _) => fn (_, rho_def) =>
@@ -2266,7 +2243,7 @@ fun friend_of_corec_cmd ((raw_fun_name, raw_fun_T_opt), raw_eq) lthy =
     val fun_T =
       (case code_goal of
         @{const Trueprop} $ (Const (@{const_name HOL.eq}, _) $ t $ _) => fastype_of (head_of t)
-      | _ => error "Expected HOL equation");
+      | _ => ill_formed_equation_lhs_rhs lthy [code_goal]);
     val fun_t = Const (fun_name, fun_T);
 
     val (arg_Ts, res_T as Type (fpT_name, _)) = strip_type fun_T;
@@ -2283,8 +2260,8 @@ fun friend_of_corec_cmd ((raw_fun_name, raw_fun_T_opt), raw_eq) lthy =
     val parsed_eq = parse_corec_equation lthy [] code_goal;
 
     val (((rho, rho_def), (const_transfer_goals, rho_transfer_goal)), lthy) =
-      extract_rho_return_transfer_goals fun_b version dead_pre_bnf dead_k_bnf Y Z preT fun_T k_T
-        ssig_T ssig_fp_sugar friend_parse_info fun_t parsed_eq lthy;
+      extract_rho_return_transfer_goals fun_b version dead_pre_bnf dead_k_bnf Y Z preT k_T ssig_T
+        ssig_fp_sugar friend_parse_info fun_t parsed_eq lthy;
 
     fun register_friend_extra_and_note_thms code_goal code_thm const_transfers k_T friend_info
         lthy =
@@ -2393,13 +2370,13 @@ val _ = Outer_Syntax.local_theory @{command_keyword corec}
   "define nonprimitive corecursive functions"
   ((Scan.optional (@{keyword "("} |-- Parse.!!! (Parse.list1 corec_option_parser)
       --| @{keyword ")"}) []) -- (Parse.vars --| Parse.where_ -- Parse.prop)
-   >> uncurry corec_cmd);
+   >> uncurry (corec_cmd true));
 
 val _ = Outer_Syntax.local_theory_to_proof @{command_keyword corecursive}
   "define nonprimitive corecursive functions"
   ((Scan.optional (@{keyword "("} |-- Parse.!!! (Parse.list1 corec_option_parser)
       --| @{keyword ")"}) []) -- (Parse.vars --| Parse.where_ -- Parse.prop)
-   >> uncurry corecursive_cmd);
+   >> uncurry (corecursive_cmd true));
 
 val _ = Outer_Syntax.local_theory_to_proof @{command_keyword friend_of_corec}
   "register a function as a legal context for nonprimitive corecursion"

@@ -23,7 +23,8 @@ object Resources
 class Resources(
   val loaded_theories: Set[String],
   val known_theories: Map[String, Document.Node.Name],
-  val base_syntax: Outer_Syntax)
+  val base_syntax: Outer_Syntax,
+  val log: Logger = No_Logger)
 {
   /* document node names */
 
@@ -43,13 +44,33 @@ class Resources(
   def append(dir: String, source_path: Path): String =
     (Path.explode(dir) + source_path).expand.implode
 
-  def with_thy_reader[A](name: Document.Node.Name, f: Reader[Char] => A): A =
-  {
-    val path = Path.explode(name.node)
-    if (!path.is_file) error("No such file: " + path.toString)
+  def append_file(dir: String, raw_name: String): String =
+    if (Path.is_valid(raw_name)) append(dir, Path.explode(raw_name))
+    else raw_name
 
-    val reader = Scan.byte_reader(path.file)
-    try { f(reader) } finally { reader.close }
+
+
+  /* source files of Isabelle/ML bootstrap */
+
+  def source_file(raw_name: String): Option[String] =
+  {
+    if (Path.is_wellformed(raw_name)) {
+      if (Path.is_valid(raw_name)) {
+        def check(p: Path): Option[Path] = if (p.is_file) Some(p) else None
+
+        val path = Path.explode(raw_name)
+        val path1 =
+          if (path.is_absolute || path.is_current) check(path)
+          else {
+            check(Path.explode("~~/src/Pure") + path) orElse
+              (if (Isabelle_System.getenv("ML_SOURCES") == "") None
+               else check(Path.explode("$ML_SOURCES") + path))
+          }
+        Some(File.platform_path(path1 getOrElse path))
+      }
+      else None
+    }
+    else Some(raw_name)
   }
 
 
@@ -87,6 +108,15 @@ class Resources(
     }
   }
 
+  def with_thy_reader[A](name: Document.Node.Name, f: Reader[Char] => A): A =
+  {
+    val path = Path.explode(name.node)
+    if (!path.is_file) error("No such file: " + path.toString)
+
+    val reader = Scan.byte_reader(path.file)
+    try { f(reader) } finally { reader.close }
+  }
+
   def check_thy_reader(qualifier: String, node_name: Document.Node.Name,
     reader: Reader[Char], start: Token.Pos): Document.Node.Header =
   {
@@ -122,6 +152,16 @@ class Resources(
     catch { case ERROR(_) => false }
 
 
+  /* special header */
+
+  def special_header(name: Document.Node.Name): Option[Document.Node.Header] =
+    if (Thy_Header.is_ml_root(name.theory))
+      Some(Document.Node.Header(List((import_name("", name, Thy_Header.ML_BOOTSTRAP), Position.none))))
+    else if (Thy_Header.is_bootstrap(name.theory))
+      Some(Document.Node.Header(List((import_name("", name, Thy_Header.PURE), Position.none))))
+    else None
+
+
   /* document changes */
 
   def parse_change(
@@ -133,4 +173,3 @@ class Resources(
 
   def commit(change: Session.Change) { }
 }
-

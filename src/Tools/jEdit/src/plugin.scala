@@ -158,7 +158,7 @@ object PIDE
     }
   }
 
-  def rendering(view: View): Rendering = GUI_Thread.now
+  def rendering(view: View): JEdit_Rendering = GUI_Thread.now
   {
     val text_area = view.getTextArea
     document_view(text_area) match {
@@ -333,9 +333,14 @@ class Plugin extends EBPlugin
               "It is for testing only, not for production use.")
           }
 
-          Session_Build.session_build(jEdit.getActiveView())
+          val view = jEdit.getActiveView()
 
-          Keymap_Merge.check_dialog(jEdit.getActiveView())
+          Session_Build.session_build(view)
+
+          Keymap_Merge.check_dialog(view)
+
+          PIDE.editor.hyperlink_position(true, Document.Snapshot.init,
+            JEdit_Sessions.session_info().open_root).foreach(_.follow(view))
 
         case msg: BufferUpdate
         if msg.getWhat == BufferUpdate.LOADED ||

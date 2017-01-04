@@ -198,7 +198,7 @@ object JEdit_Lib
   def caret_range(text_area: TextArea): Text.Range =
     point_range(text_area.getBuffer, text_area.getCaretPosition)
 
-  def before_caret_range(text_area: TextArea, rendering: Rendering): Text.Range =
+  def before_caret_range(text_area: TextArea, rendering: JEdit_Rendering): Text.Range =
   {
     val snapshot = rendering.snapshot
     val former_caret = snapshot.revert(text_area.getCaretPosition)
@@ -320,7 +320,7 @@ object JEdit_Lib
   {
     val name1 =
       if (name.startsWith("idea-icons/")) {
-        val file = File.platform_url(Path.explode("$JEDIT_HOME/dist/jars/idea-icons.jar"))
+        val file = Path.explode("$JEDIT_HOME/dist/jars/idea-icons.jar").file.toURI.toASCIIString
         "jar:" + file + "!/" + name
       }
       else name

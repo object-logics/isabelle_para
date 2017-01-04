@@ -713,9 +713,61 @@ qed
 lemma div_by_1 [simp]: "a div 1 = a"
   using nonzero_mult_div_cancel_left [of 1 a] by simp
 
+lemma dvd_div_eq_0_iff:
+  assumes "b dvd a"
+  shows "a div b = 0 \<longleftrightarrow> a = 0"
+  using assms by (elim dvdE, cases "b = 0") simp_all  
+
+lemma dvd_div_eq_cancel:
+  "a div c = b div c \<Longrightarrow> c dvd a \<Longrightarrow> c dvd b \<Longrightarrow> a = b"
+  by (elim dvdE, cases "c = 0") simp_all
+
+lemma dvd_div_eq_iff:
+  "c dvd a \<Longrightarrow> c dvd b \<Longrightarrow> a div c = b div c \<longleftrightarrow> a = b"
+  by (elim dvdE, cases "c = 0") simp_all
+
 end
 
 class idom_divide = idom + semidom_divide
+begin
+
+lemma dvd_neg_div:
+  assumes "b dvd a"
+  shows "- a div b = - (a div b)"
+proof (cases "b = 0")
+  case True
+  then show ?thesis by simp
+next
+  case False
+  from assms obtain c where "a = b * c" ..
+  then have "- a div b = (b * - c) div b"
+    by simp
+  from False also have "\<dots> = - c"
+    by (rule nonzero_mult_div_cancel_left)  
+  with False \<open>a = b * c\<close> show ?thesis
+    by simp
+qed
+
+lemma dvd_div_neg:
+  assumes "b dvd a"
+  shows "a div - b = - (a div b)"
+proof (cases "b = 0")
+  case True
+  then show ?thesis by simp
+next
+  case False
+  then have "- b \<noteq> 0"
+    by simp
+  from assms obtain c where "a = b * c" ..
+  then have "a div - b = (- b * - c) div - b"
+    by simp
+  from \<open>- b \<noteq> 0\<close> also have "\<dots> = - c"
+    by (rule nonzero_mult_div_cancel_left)  
+  with False \<open>a = b * c\<close> show ?thesis
+    by simp
+qed
+
+end
 
 class algebraic_semidom = semidom_divide
 begin
@@ -882,6 +934,39 @@ next
   from \<open>a * c dvd b\<close> obtain d where "b = a * c * d" ..
   with False show ?thesis
     by (simp add: mult.commute [of a] mult.assoc)
+qed
+
+lemma div_div_eq_right:
+  assumes "c dvd b" "b dvd a"
+  shows   "a div (b div c) = a div b * c"
+proof (cases "c = 0 \<or> b = 0")
+  case True
+  then show ?thesis
+    by auto
+next
+  case False
+  from assms obtain r s where "b = c * r" and "a = c * r * s"
+    by (blast elim: dvdE)
+  moreover with False have "r \<noteq> 0"
+    by auto
+  ultimately show ?thesis using False
+    by simp (simp add: mult.commute [of _ r] mult.assoc mult.commute [of c])
+qed
+
+lemma div_div_div_same:
+  assumes "d dvd b" "b dvd a"
+  shows   "(a div d) div (b div d) = a div b"
+proof (cases "b = 0 \<or> d = 0")
+  case True
+  with assms show ?thesis
+    by auto
+next
+  case False
+  from assms obtain r s
+    where "a = d * r * s" and "b = d * r"
+    by (blast elim: dvdE)
+  with False show ?thesis
+    by simp (simp add: ac_simps)
 qed
 
 
@@ -1059,6 +1144,15 @@ lemma is_unit_div_mult_cancel_right:
   assumes "a \<noteq> 0" and "is_unit b"
   shows "a div (b * a) = 1 div b"
   using assms is_unit_div_mult_cancel_left [of a b] by (simp add: ac_simps)
+
+lemma unit_div_eq_0_iff:
+  assumes "is_unit b"
+  shows "a div b = 0 \<longleftrightarrow> a = 0"
+  by (rule dvd_div_eq_0_iff) (insert assms, auto)  
+
+lemma div_mult_unit2:
+  "is_unit c \<Longrightarrow> b dvd a \<Longrightarrow> a div (b * c) = a div b div c"
+  by (rule dvd_div_mult2_eq) (simp_all add: mult_unit_dvd_iff)
 
 end
 
@@ -1370,6 +1464,17 @@ proof -
   with \<open>normalize a = a\<close> have "a = normalize b"
     by simp
   with \<open>normalize b = b\<close> show "a = b"
+    by simp
+qed
+
+lemma normalize_unit_factor_eqI:
+  assumes "normalize a = normalize b"
+    and "unit_factor a = unit_factor b"
+  shows "a = b"
+proof -
+  from assms have "unit_factor a * normalize a = unit_factor b * normalize b"
+    by simp
+  then show ?thesis
     by simp
 qed
 
@@ -2020,6 +2125,49 @@ lemma abs_sgn_eq_1 [simp]:
 
 lemma abs_sgn_eq: "\<bar>sgn a\<bar> = (if a = 0 then 0 else 1)"
   by (simp add: sgn_if)
+
+lemma sgn_mult_self_eq [simp]:
+  "sgn a * sgn a = of_bool (a \<noteq> 0)"
+  by (cases "a > 0") simp_all
+
+lemma abs_mult_self_eq [simp]:
+  "\<bar>a\<bar> * \<bar>a\<bar> = a * a"
+  by (cases "a > 0") simp_all
+
+lemma same_sgn_sgn_add:
+  "sgn (a + b) = sgn a" if "sgn b = sgn a"
+proof (cases a 0 rule: linorder_cases)
+  case equal
+  with that show ?thesis
+    by simp
+next
+  case less
+  with that have "b < 0"
+    by (simp add: sgn_1_neg)
+  with \<open>a < 0\<close> have "a + b < 0"
+    by (rule add_neg_neg)
+  with \<open>a < 0\<close> show ?thesis
+    by simp
+next
+  case greater
+  with that have "b > 0"
+    by (simp add: sgn_1_pos)
+  with \<open>a > 0\<close> have "a + b > 0"
+    by (rule add_pos_pos)
+  with \<open>a > 0\<close> show ?thesis
+    by simp
+qed
+
+lemma same_sgn_abs_add:
+  "\<bar>a + b\<bar> = \<bar>a\<bar> + \<bar>b\<bar>" if "sgn b = sgn a"
+proof -
+  have "a + b = sgn a * \<bar>a\<bar> + sgn b * \<bar>b\<bar>"
+    by (simp add: sgn_mult_abs)
+  also have "\<dots> = sgn a * (\<bar>a\<bar> + \<bar>b\<bar>)"
+    using that by (simp add: algebra_simps)
+  finally show ?thesis
+    by (auto simp add: abs_mult)
+qed
 
 lemma abs_dvd_iff [simp]: "\<bar>m\<bar> dvd k \<longleftrightarrow> m dvd k"
   by (simp add: abs_if)
