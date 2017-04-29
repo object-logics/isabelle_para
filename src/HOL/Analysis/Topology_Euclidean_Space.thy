@@ -1265,6 +1265,11 @@ lemma cbox_Pair_eq: "cbox (a, c) (b, d) = cbox a b \<times> cbox c d"
 lemma cbox_Pair_iff [iff]: "(x, y) \<in> cbox (a, c) (b, d) \<longleftrightarrow> x \<in> cbox a b \<and> y \<in> cbox c d"
   by (force simp: cbox_Pair_eq)
 
+lemma cbox_Complex_eq: "cbox (Complex a c) (Complex b d) = (\<lambda>(x,y). Complex x y) ` (cbox a b \<times> cbox c d)"
+  apply (auto simp: cbox_def Basis_complex_def)
+  apply (rule_tac x = "(Re x, Im x)" in image_eqI)
+  using complex_eq by auto
+
 lemma cbox_Pair_eq_0: "cbox (a, c) (b, d) = {} \<longleftrightarrow> cbox a b = {} \<or> cbox c d = {}"
   by (force simp: cbox_Pair_eq)
 
@@ -3916,19 +3921,6 @@ definition (in metric_space) bounded :: "'a set \<Rightarrow> bool"
 lemma bounded_subset_cball: "bounded S \<longleftrightarrow> (\<exists>e x. S \<subseteq> cball x e \<and> 0 \<le> e)"
   unfolding bounded_def subset_eq  by auto (meson order_trans zero_le_dist)
 
-lemma bounded_subset_ballD:
-  assumes "bounded S" shows "\<exists>r. 0 < r \<and> S \<subseteq> ball x r"
-proof -
-  obtain e::real and y where "S \<subseteq> cball y e"  "0 \<le> e"
-    using assms by (auto simp: bounded_subset_cball)
-  then show ?thesis
-    apply (rule_tac x="dist x y + e + 1" in exI)
-    apply (simp add: add.commute add_pos_nonneg)
-    apply (erule subset_trans)
-    apply (clarsimp simp add: cball_def)
-    by (metis add_le_cancel_right add_strict_increasing dist_commute dist_triangle_le zero_less_one)
-qed
-
 lemma bounded_any_center: "bounded S \<longleftrightarrow> (\<exists>e. \<forall>y\<in>S. dist a y \<le> e)"
   unfolding bounded_def
   by auto (metis add.commute add_le_cancel_right dist_commute dist_triangle_le)
@@ -4012,6 +4004,22 @@ proof -
     unfolding bounded_def by fast
   then show ?thesis
     by (metis insert_is_Un bounded_Un)
+qed
+
+lemma bounded_subset_ballI: "S \<subseteq> ball x r \<Longrightarrow> bounded S"
+  by (meson bounded_ball bounded_subset)
+
+lemma bounded_subset_ballD:
+  assumes "bounded S" shows "\<exists>r. 0 < r \<and> S \<subseteq> ball x r"
+proof -
+  obtain e::real and y where "S \<subseteq> cball y e"  "0 \<le> e"
+    using assms by (auto simp: bounded_subset_cball)
+  then show ?thesis
+    apply (rule_tac x="dist x y + e + 1" in exI)
+    apply (simp add: add.commute add_pos_nonneg)
+    apply (erule subset_trans)
+    apply (clarsimp simp add: cball_def)
+    by (metis add_le_cancel_right add_strict_increasing dist_commute dist_triangle_le zero_less_one)
 qed
 
 lemma finite_imp_bounded [intro]: "finite S \<Longrightarrow> bounded S"
@@ -4538,7 +4546,7 @@ proof -
   have "compact U" "\<forall>x\<in>U. open (ball x 1)" "U \<subseteq> (\<Union>x\<in>U. ball x 1)"
     using assms by auto
   then obtain D where D: "D \<subseteq> U" "finite D" "U \<subseteq> (\<Union>x\<in>D. ball x 1)"
-    by (rule compactE_image)
+    by (metis compactE_image)
   from \<open>finite D\<close> have "bounded (\<Union>x\<in>D. ball x 1)"
     by (simp add: bounded_UN)
   then show "bounded U" using \<open>U \<subseteq> (\<Union>x\<in>D. ball x 1)\<close>
@@ -7717,14 +7725,14 @@ proof (rule compactI)
       and c: "\<And>y. y \<in> t \<Longrightarrow> c y \<in> C \<and> open (a y) \<and> open (b y) \<and> x \<in> a y \<and> y \<in> b y \<and> a y \<times> b y \<subseteq> c y"
       by metis
     then have "\<forall>y\<in>t. open (b y)" "t \<subseteq> (\<Union>y\<in>t. b y)" by auto
-    from compactE_image[OF \<open>compact t\<close> this] obtain D where D: "D \<subseteq> t" "finite D" "t \<subseteq> (\<Union>y\<in>D. b y)"
-      by auto
+    with compactE_image[OF \<open>compact t\<close>] obtain D where D: "D \<subseteq> t" "finite D" "t \<subseteq> (\<Union>y\<in>D. b y)"
+      by metis
     moreover from D c have "(\<Inter>y\<in>D. a y) \<times> t \<subseteq> (\<Union>y\<in>D. c y)"
       by (fastforce simp: subset_eq)
     ultimately show "\<exists>a. open a \<and> x \<in> a \<and> (\<exists>d\<subseteq>C. finite d \<and> a \<times> t \<subseteq> \<Union>d)"
       using c by (intro exI[of _ "c`D"] exI[of _ "\<Inter>(a`D)"] conjI) (auto intro!: open_INT)
   qed
-  then obtain a d where a: "\<forall>x\<in>s. open (a x)" "s \<subseteq> (\<Union>x\<in>s. a x)"
+  then obtain a d where a: "\<And>x. x\<in>s \<Longrightarrow> open (a x)" "s \<subseteq> (\<Union>x\<in>s. a x)"
     and d: "\<And>x. x \<in> s \<Longrightarrow> d x \<subseteq> C \<and> finite (d x) \<and> a x \<times> t \<subseteq> \<Union>d x"
     unfolding subset_eq UN_iff by metis
   moreover
