@@ -144,6 +144,9 @@ object Library
 
   def trim_substring(s: String): String = new String(s.toCharArray)
 
+  def proper_string(s: String): Option[String] =
+    if (s == null || s == "") None else Some(s)
+
 
   /* quote */
 
