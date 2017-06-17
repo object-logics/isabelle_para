@@ -51,15 +51,16 @@ object Mercurial
     }
   }
 
-  def clone_repository(
-    source: String, root: Path, options: String = "", ssh: Option[SSH.Session] = None): Repository =
+  def clone_repository(source: String, root: Path, rev: String = "", options: String = "",
+    ssh: Option[SSH.Session] = None): Repository =
   {
     val hg = new Repository(root, ssh)
     ssh match {
       case None => Isabelle_System.mkdirs(hg.root.dir)
       case Some(ssh) => ssh.mkdirs(hg.root.dir)
     }
-    hg.command("clone", Bash.string(source) + " " + File.bash_path(hg.root), options).check
+    hg.command("clone", Bash.string(source) + " " + File.bash_path(hg.root) + opt_rev(rev), options)
+      .check
     hg
   }
 
@@ -71,7 +72,7 @@ object Mercurial
         case Some(ssh) => ssh.is_dir(root)
       }
     if (present) { val hg = repository(root, ssh = ssh); hg.pull(remote = source); hg }
-    else clone_repository(source, root, options = "--pull --noupdate", ssh = ssh)
+    else clone_repository(source, root, options = "--noupdate", ssh = ssh)
   }
 
   class Repository private[Mercurial](root_path: Path, ssh: Option[SSH.Session])
