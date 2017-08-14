@@ -47,10 +47,14 @@ class Theories_Dockable(view: View, position: String) extends Dockable(view, pos
         val index_location = peer.indexToLocation(index)
         if (index >= 0 && in_checkbox(index_location, point))
           tooltip = "Mark as required for continuous checking"
-        if (index >= 0 && in_label(index_location, point))
-          tooltip = "theory " + quote(listData(index).theory)
-        else
-          tooltip = null
+        else if (index >= 0 && in_label(index_location, point)) {
+          val name = listData(index)
+          val st = overall_node_status(name)
+          tooltip =
+            "theory " + quote(name.theory) +
+              (if (st == Overall_Node_Status.ok) "" else " (" + st + ")")
+        }
+        else tooltip = null
     }
   }
   status.peer.setLayoutOrientation(JList.HORIZONTAL_WRAP)
@@ -95,6 +99,18 @@ class Theories_Dockable(view: View, position: String) extends Dockable(view, pos
   private var nodes_status: Map[Document.Node.Name, Protocol.Node_Status] = Map.empty
   private var nodes_required: Set[Document.Node.Name] = Document_Model.required_nodes()
 
+  private object Overall_Node_Status extends Enumeration
+  {
+    val ok, failed, pending = Value
+  }
+
+  private def overall_node_status(name: Document.Node.Name): Overall_Node_Status.Value =
+    nodes_status.get(name) match {
+      case Some(st) if st.consolidated =>
+        if (st.ok) Overall_Node_Status.ok else Overall_Node_Status.failed
+      case _ => Overall_Node_Status.pending
+    }
+
   private def in(geometry: Option[(Point, Dimension)], loc0: Point, p: Point): Boolean =
     geometry match {
       case Some((loc, size)) =>
@@ -132,10 +148,6 @@ class Theories_Dockable(view: View, position: String) extends Dockable(view, pos
     val label = new Label {
       background = view.getTextArea.getPainter.getBackground
       foreground = view.getTextArea.getPainter.getForeground
-      border =
-        BorderFactory.createCompoundBorder(
-          BorderFactory.createLineBorder(foreground, 1),
-          BorderFactory.createEmptyBorder(1, 1, 1, 1))
       opaque = false
       xAlignment = Alignment.Leading
 
@@ -158,8 +170,8 @@ class Theories_Dockable(view: View, position: String) extends Dockable(view, pos
                 (st.failed, PIDE.options.color_value("error_color"))
               ).filter(_._1 > 0)
 
-            ((size.width - 1) /: segments)({ case (last, (n, color)) =>
-              val w = (n * ((size.width - 2) - segments.length) / st.total) max 4
+            ((size.width - 2) /: segments)({ case (last, (n, color)) =>
+              val w = (n * ((size.width - 4) - segments.length) / st.total) max 4
               paint_segment(last - w, w, color)
               last - w - 1
             })
@@ -174,6 +186,21 @@ class Theories_Dockable(view: View, position: String) extends Dockable(view, pos
       }
     }
 
+    def label_border(name: Document.Node.Name)
+    {
+      val status = overall_node_status(name)
+      val color =
+        if (status == Overall_Node_Status.failed) PIDE.options.color_value("error_color")
+        else label.foreground
+      val thickness1 = if (status == Overall_Node_Status.pending) 1 else 2
+      val thickness2 = 3 - thickness1
+
+      label.border =
+        BorderFactory.createCompoundBorder(
+          BorderFactory.createLineBorder(color, thickness1),
+          BorderFactory.createEmptyBorder(thickness2, thickness2, thickness2, thickness2))
+    }
+
     layout(checkbox) = BorderPanel.Position.West
     layout(label) = BorderPanel.Position.Center
   }
@@ -186,6 +213,7 @@ class Theories_Dockable(view: View, position: String) extends Dockable(view, pos
       val component = Node_Renderer_Component
       component.node_name = name
       component.checkbox.selected = nodes_required.contains(name)
+      component.label_border(name)
       component.label.text = name.theory_base_name
       component
     }
@@ -208,7 +236,11 @@ class Theories_Dockable(view: View, position: String) extends Dockable(view, pos
       (nodes_status /: iterator)({ case (status, (name, node)) =>
           if (!name.is_theory || PIDE.resources.session_base.loaded_theory(name) || node.is_empty)
             status
-          else status + (name -> Protocol.node_status(snapshot.state, snapshot.version, node)) })
+          else {
+            val st = Protocol.node_status(snapshot.state, snapshot.version, name, node)
+            status + (name -> st)
+          }
+      })
 
     val nodes_status2 =
       nodes_status1 -- nodes_status1.keysIterator.filter(nodes.is_hidden(_))
