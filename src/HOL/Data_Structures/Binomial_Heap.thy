@@ -92,10 +92,15 @@ subsection \<open>Operations and Their Functional Correctness\<close>
     
 subsubsection \<open>\<open>link\<close>\<close>
 
-definition link :: "'a::linorder tree \<Rightarrow> 'a tree \<Rightarrow> 'a tree" where
-  "link t\<^sub>1 t\<^sub>2 = (case (t\<^sub>1,t\<^sub>2) of (Node r x\<^sub>1 c\<^sub>1, Node _ x\<^sub>2 c\<^sub>2) \<Rightarrow>
-    if x\<^sub>1\<le>x\<^sub>2 then Node (r+1) x\<^sub>1 (t\<^sub>2#c\<^sub>1) else Node (r+1) x\<^sub>2 (t\<^sub>1#c\<^sub>2)
-  )"
+context
+includes pattern_aliases
+begin
+
+fun link :: "('a::linorder) tree \<Rightarrow> 'a tree \<Rightarrow> 'a tree" where
+  "link (Node r x\<^sub>1 ts\<^sub>1 =: t\<^sub>1) (Node r' x\<^sub>2 ts\<^sub>2 =: t\<^sub>2) = 
+    (if x\<^sub>1\<le>x\<^sub>2 then Node (r+1) x\<^sub>1 (t\<^sub>2#ts\<^sub>1) else Node (r+1) x\<^sub>2 (t\<^sub>1#ts\<^sub>2))"
+
+end
 
 lemma invar_btree_link:
   assumes "invar_btree t\<^sub>1"
@@ -103,20 +108,20 @@ lemma invar_btree_link:
   assumes "rank t\<^sub>1 = rank t\<^sub>2"  
   shows "invar_btree (link t\<^sub>1 t\<^sub>2)"  
 using assms 
-by (auto simp: link_def split: tree.split)
+by (cases "(t\<^sub>1, t\<^sub>2)" rule: link.cases) simp
 
 lemma invar_link_otree:      
   assumes "invar_otree t\<^sub>1"
   assumes "invar_otree t\<^sub>2"
   shows "invar_otree (link t\<^sub>1 t\<^sub>2)"  
 using assms 
-by (auto simp: link_def split: tree.split)
+by (cases "(t\<^sub>1, t\<^sub>2)" rule: link.cases) auto
 
 lemma rank_link[simp]: "rank (link t\<^sub>1 t\<^sub>2) = rank t\<^sub>1 + 1"
-by (auto simp: link_def split: tree.split)
+by (cases "(t\<^sub>1, t\<^sub>2)" rule: link.cases) simp
     
 lemma mset_link[simp]: "mset_tree (link t\<^sub>1 t\<^sub>2) = mset_tree t\<^sub>1 + mset_tree t\<^sub>2"
-by (auto simp: link_def split: tree.split)
+by (cases "(t\<^sub>1, t\<^sub>2)" rule: link.cases) simp
     
 subsubsection \<open>\<open>ins_tree\<close>\<close>
 
@@ -254,9 +259,7 @@ subsubsection \<open>\<open>get_min\<close>\<close>
 
 fun get_min :: "'a::linorder heap \<Rightarrow> 'a" where
   "get_min [t] = root t"
-| "get_min (t#ts) = (let x = root t; 
-                          y = get_min ts
-                      in if x \<le> y then x else y)"
+| "get_min (t#ts) = min (root t) (get_min ts)"
   
 lemma invar_otree_root_min:
   assumes "invar_otree t"
@@ -273,7 +276,7 @@ lemma get_min_mset_aux:
   using assms  
 apply (induction ts arbitrary: x rule: get_min.induct)  
 apply (auto 
-      simp: invar_otree_root_min intro: order_trans;
+      simp: invar_otree_root_min min_def intro: order_trans;
       meson linear order_trans invar_otree_root_min
       )+
 done  
@@ -287,7 +290,7 @@ using assms by (auto simp: invar_def get_min_mset_aux)
 
 lemma get_min_member:    
   "ts\<noteq>[] \<Longrightarrow> get_min ts \<in># mset_heap ts"  
-by (induction ts rule: get_min.induct) (auto)
+by (induction ts rule: get_min.induct) (auto simp: min_def)
 
 lemma get_min:    
   assumes "mset_heap ts \<noteq> {#}"
@@ -308,7 +311,7 @@ lemma get_min_rest_get_min_same_root:
   assumes "get_min_rest ts = (t',ts')"  
   shows "root t' = get_min ts"  
 using assms  
-by (induction ts arbitrary: t' ts' rule: get_min.induct) (auto split: prod.splits)
+by (induction ts arbitrary: t' ts' rule: get_min.induct) (auto simp: min_def split: prod.splits)
 
 lemma mset_get_min_rest:    
   assumes "get_min_rest ts = (t',ts')"  
@@ -445,7 +448,7 @@ proof (induction t)
 qed
    
 text \<open>The length of a binomial heap is bounded by the number of its elements\<close>  
-lemma size_mset_heap:      
+lemma size_mset_bheap:      
   assumes "invar_bheap ts"
   shows "2^length ts \<le> size (mset_heap ts) + 1"
 proof -
@@ -500,7 +503,7 @@ proof -
     unfolding t_insert_def by (rule t_ins_tree_simple_bound)
   also have "\<dots> \<le> log 2 (2 * (size (mset_heap ts) + 1))" 
   proof -
-    from size_mset_heap[of ts] assms 
+    from size_mset_bheap[of ts] assms 
     have "2 ^ length ts \<le> size (mset_heap ts) + 1"
       unfolding invar_def by auto
     hence "2 ^ (length ts + 1) \<le> 2 * (size (mset_heap ts) + 1)" by auto
@@ -549,8 +552,8 @@ proof -
     by (rule power_increasing) auto
   also have "\<dots> = 2*(2^length ts\<^sub>1)\<^sup>2*(2^length ts\<^sub>2)\<^sup>2"    
     by (auto simp: algebra_simps power_add power_mult)
-  also note BINVARS(1)[THEN size_mset_heap]
-  also note BINVARS(2)[THEN size_mset_heap]
+  also note BINVARS(1)[THEN size_mset_bheap]
+  also note BINVARS(2)[THEN size_mset_bheap]
   finally have "2 ^ t_merge ts\<^sub>1 ts\<^sub>2 \<le> 2 * (n\<^sub>1 + 1)\<^sup>2 * (n\<^sub>2 + 1)\<^sup>2" 
     by (auto simp: power2_nat_le_eq_le n\<^sub>1_def n\<^sub>2_def)
   from le_log2_of_power[OF this] have "t_merge ts\<^sub>1 ts\<^sub>2 \<le> log 2 \<dots>"    
@@ -593,7 +596,7 @@ proof -
   have 1: "t_get_min ts = length ts" using assms t_get_min_estimate by auto
   also have "\<dots> \<le> log 2 (size (mset_heap ts) + 1)"
   proof -
-    from size_mset_heap[of ts] assms have "2 ^ length ts \<le> size (mset_heap ts) + 1"
+    from size_mset_bheap[of ts] assms have "2 ^ length ts \<le> size (mset_heap ts) + 1"
       unfolding invar_def by auto
     thus ?thesis using le_log2_of_power by blast
   qed
@@ -617,7 +620,7 @@ proof -
   have 1: "t_get_min_rest ts = length ts" using assms t_get_min_rest_estimate by auto
   also have "\<dots> \<le> log 2 (size (mset_heap ts) + 1)"
   proof -
-    from size_mset_heap[of ts] assms have "2 ^ length ts \<le> size (mset_heap ts) + 1"
+    from size_mset_bheap[of ts] assms have "2 ^ length ts \<le> size (mset_heap ts) + 1"
       by auto
     thus ?thesis using le_log2_of_power by blast
   qed
@@ -649,7 +652,7 @@ lemma t_rev_ts1_bound_aux:
 proof -
   have "t_rev ts = length ts + 1" by (auto simp: t_rev_def)
   hence "2^t_rev ts = 2*2^length ts" by auto
-  also have "\<dots> \<le> 2*n+2" using size_mset_heap[OF BINVAR] by (auto simp: n_def)
+  also have "\<dots> \<le> 2*n+2" using size_mset_bheap[OF BINVAR] by (auto simp: n_def)
   finally have "2 ^ t_rev ts \<le> 2 * n + 2" .
   from le_log2_of_power[OF this] have "t_rev ts \<le> log 2 (2 * (n + 1))"
     by auto
