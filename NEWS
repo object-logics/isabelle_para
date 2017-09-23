@@ -4,6 +4,16 @@ Isabelle NEWS -- history of user-relevant changes
 (Note: Isabelle/jEdit shows a tree-view of the NEWS file in Sidekick.)
 
 
+New in this Isabelle version
+----------------------------
+
+*** HOL ***
+
+* SMT module:
+  - The 'smt_oracle' option is now necessary when using the 'smt' method
+    with a solver other than Z3. INCOMPATIBILITY.
+
+
 New in Isabelle2017 (October 2017)
 ----------------------------------
 
