@@ -220,48 +220,51 @@ lemma of_nat_of_integer [simp]:
   "of_nat (nat_of_integer k) = max 0 k"
   by transfer auto
 
-instantiation integer :: normalization_semidom
+instantiation integer :: unique_euclidean_ring
 begin
-
-lift_definition normalize_integer :: "integer \<Rightarrow> integer"
-  is "normalize :: int \<Rightarrow> int"
-  .
-
-declare normalize_integer.rep_eq [simp]
-
-lift_definition unit_factor_integer :: "integer \<Rightarrow> integer"
-  is "unit_factor :: int \<Rightarrow> int"
-  .
-
-declare unit_factor_integer.rep_eq [simp]
 
 lift_definition divide_integer :: "integer \<Rightarrow> integer \<Rightarrow> integer"
   is "divide :: int \<Rightarrow> int \<Rightarrow> int"
   .
 
 declare divide_integer.rep_eq [simp]
-  
-instance
-  by (standard; transfer)
-    (auto simp add: mult_sgn_abs sgn_mult abs_eq_iff')
 
-end
-
-instantiation integer :: ring_div
-begin
-  
 lift_definition modulo_integer :: "integer \<Rightarrow> integer \<Rightarrow> integer"
   is "modulo :: int \<Rightarrow> int \<Rightarrow> int"
   .
 
 declare modulo_integer.rep_eq [simp]
 
+lift_definition euclidean_size_integer :: "integer \<Rightarrow> nat"
+  is "euclidean_size :: int \<Rightarrow> nat"
+  .
+
+declare euclidean_size_integer.rep_eq [simp]
+
+lift_definition uniqueness_constraint_integer :: "integer \<Rightarrow> integer \<Rightarrow> bool"
+  is "uniqueness_constraint :: int \<Rightarrow> int \<Rightarrow> bool"
+  .
+
+declare uniqueness_constraint_integer.rep_eq [simp]
+
 instance
-  by (standard; transfer) simp_all
+  by (standard; transfer)
+    (use mult_le_mono2 [of 1] in \<open>auto simp add: sgn_mult_abs abs_mult sgn_mult abs_mod_less sgn_mod nat_mult_distrib\<close>, rule div_eqI, simp_all)
 
 end
 
-instantiation integer :: semiring_numeral_div
+lemma [code]:
+  "euclidean_size = nat_of_integer \<circ> abs"
+  by (simp add: fun_eq_iff nat_of_integer.rep_eq)
+
+lemma [code]:
+  "uniqueness_constraint (k :: integer) l \<longleftrightarrow> sgn k = sgn l"
+  by (simp add: integer_eq_iff)
+
+instance integer :: ring_parity
+  by (standard; transfer) (simp_all add: of_nat_div odd_iff_mod_2_eq_one)
+
+instantiation integer :: unique_euclidean_semiring_numeral
 begin
 
 definition divmod_integer :: "num \<Rightarrow> num \<Rightarrow> integer \<times> integer"
@@ -283,15 +286,15 @@ instance proof
     by (fact divmod_step_integer_def)
 qed (transfer,
   fact le_add_diff_inverse2
-  semiring_numeral_div_class.div_less
-  semiring_numeral_div_class.mod_less
-  semiring_numeral_div_class.div_positive
-  semiring_numeral_div_class.mod_less_eq_dividend
-  semiring_numeral_div_class.pos_mod_bound
-  semiring_numeral_div_class.pos_mod_sign
-  semiring_numeral_div_class.mod_mult2_eq
-  semiring_numeral_div_class.div_mult2_eq
-  semiring_numeral_div_class.discrete)+
+  unique_euclidean_semiring_numeral_class.div_less
+  unique_euclidean_semiring_numeral_class.mod_less
+  unique_euclidean_semiring_numeral_class.div_positive
+  unique_euclidean_semiring_numeral_class.mod_less_eq_dividend
+  unique_euclidean_semiring_numeral_class.pos_mod_bound
+  unique_euclidean_semiring_numeral_class.pos_mod_sign
+  unique_euclidean_semiring_numeral_class.mod_mult2_eq
+  unique_euclidean_semiring_numeral_class.div_mult2_eq
+  unique_euclidean_semiring_numeral_class.discrete)+
 
 end
 
@@ -434,23 +437,15 @@ lemma times_integer_code [code]:
   "Neg m * Neg n = Pos (m * n)"
   by simp_all
 
-lemma normalize_integer_code [code]:
-  "normalize = (abs :: integer \<Rightarrow> integer)"
-  by transfer simp
-
-lemma unit_factor_integer_code [code]:
-  "unit_factor = (sgn :: integer \<Rightarrow> integer)"
-  by transfer simp
-
 definition divmod_integer :: "integer \<Rightarrow> integer \<Rightarrow> integer \<times> integer"
 where
   "divmod_integer k l = (k div l, k mod l)"
 
-lemma fst_divmod [simp]:
+lemma fst_divmod_integer [simp]:
   "fst (divmod_integer k l) = k div l"
   by (simp add: divmod_integer_def)
 
-lemma snd_divmod [simp]:
+lemma snd_divmod_integer [simp]:
   "snd (divmod_integer k l) = k mod l"
   by (simp add: divmod_integer_def)
 
@@ -853,20 +848,8 @@ lemma nat_of_natural_max [simp]:
   "nat_of_natural (max k l) = max (nat_of_natural k) (nat_of_natural l)"
   by transfer rule
 
-instantiation natural :: "{semiring_div, normalization_semidom}"
+instantiation natural :: unique_euclidean_semiring
 begin
-
-lift_definition normalize_natural :: "natural \<Rightarrow> natural"
-  is "normalize :: nat \<Rightarrow> nat"
-  .
-
-declare normalize_natural.rep_eq [simp]
-
-lift_definition unit_factor_natural :: "natural \<Rightarrow> natural"
-  is "unit_factor :: nat \<Rightarrow> nat"
-  .
-
-declare unit_factor_natural.rep_eq [simp]
 
 lift_definition divide_natural :: "natural \<Rightarrow> natural \<Rightarrow> natural"
   is "divide :: nat \<Rightarrow> nat \<Rightarrow> nat"
@@ -880,10 +863,34 @@ lift_definition modulo_natural :: "natural \<Rightarrow> natural \<Rightarrow> n
 
 declare modulo_natural.rep_eq [simp]
 
+lift_definition euclidean_size_natural :: "natural \<Rightarrow> nat"
+  is "euclidean_size :: nat \<Rightarrow> nat"
+  .
+
+declare euclidean_size_natural.rep_eq [simp]
+
+lift_definition uniqueness_constraint_natural :: "natural \<Rightarrow> natural \<Rightarrow> bool"
+  is "uniqueness_constraint :: nat \<Rightarrow> nat \<Rightarrow> bool"
+  .
+
+declare uniqueness_constraint_natural.rep_eq [simp]
+
 instance
-  by standard (transfer, auto simp add: algebra_simps unit_factor_nat_def gr0_conv_Suc)+
+  by (standard; transfer)
+    (auto simp add: algebra_simps unit_factor_nat_def gr0_conv_Suc)
 
 end
+
+lemma [code]:
+  "euclidean_size = nat_of_natural"
+  by (simp add: fun_eq_iff)
+
+lemma [code]:
+  "uniqueness_constraint = (\<top> :: natural \<Rightarrow> natural \<Rightarrow> bool)"
+  by (simp add: fun_eq_iff)
+
+instance natural :: semiring_parity
+  by (standard; transfer) (simp_all add: of_nat_div odd_iff_mod_2_eq_one)
 
 lift_definition natural_of_integer :: "integer \<Rightarrow> natural"
   is "nat :: int \<Rightarrow> nat"
@@ -1019,31 +1026,6 @@ lemma [code abstract]:
 lemma [code abstract]:
   "integer_of_natural (m * n) = integer_of_natural m * integer_of_natural n"
   by transfer simp
-
-lemma [code]:
-  "normalize n = n" for n :: natural
-  by transfer simp
-
-lemma [code]:
-  "unit_factor n = of_bool (n \<noteq> 0)" for n :: natural
-proof (cases "n = 0")
-  case True
-  then show ?thesis
-    by simp
-next
-  case False
-  then have "unit_factor n = 1"
-  proof transfer
-    fix n :: nat
-    assume "n \<noteq> 0"
-    then obtain m where "n = Suc m"
-      by (cases n) auto
-    then show "unit_factor n = 1"
-      by simp
-  qed
-  with False show ?thesis
-    by simp
-qed
 
 lemma [code abstract]:
   "integer_of_natural (m div n) = integer_of_natural m div integer_of_natural n"

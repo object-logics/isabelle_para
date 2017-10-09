@@ -118,6 +118,13 @@ lemma split_of_bool_asm: "P (of_bool p) \<longleftrightarrow> \<not> (p \<and> \
 end
 
 class semiring_1 = zero_neq_one + semiring_0 + monoid_mult
+begin
+
+lemma (in semiring_1) of_bool_conj:
+  "of_bool (P \<and> Q) = of_bool P * of_bool Q"
+  by auto
+
+end
 
 text \<open>Abstract divisibility\<close>
 
@@ -1558,6 +1565,117 @@ lemma minus_mod_eq_mult_div: "a - a mod b = b * (a div b)"
 end
 
 
+text \<open>Quotient and remainder in integral domains\<close>
+
+class semidom_modulo = algebraic_semidom + semiring_modulo
+begin
+
+lemma mod_0 [simp]: "0 mod a = 0"
+  using div_mult_mod_eq [of 0 a] by simp
+
+lemma mod_by_0 [simp]: "a mod 0 = a"
+  using div_mult_mod_eq [of a 0] by simp
+
+lemma mod_by_1 [simp]:
+  "a mod 1 = 0"
+proof -
+  from div_mult_mod_eq [of a one] div_by_1 have "a + a mod 1 = a" by simp
+  then have "a + a mod 1 = a + 0" by simp
+  then show ?thesis by (rule add_left_imp_eq)
+qed
+
+lemma mod_self [simp]:
+  "a mod a = 0"
+  using div_mult_mod_eq [of a a] by simp
+
+lemma dvd_imp_mod_0 [simp]:
+  assumes "a dvd b"
+  shows "b mod a = 0"
+  using assms minus_div_mult_eq_mod [of b a] by simp
+
+lemma mod_0_imp_dvd: 
+  assumes "a mod b = 0"
+  shows   "b dvd a"
+proof -
+  have "b dvd ((a div b) * b)" by simp
+  also have "(a div b) * b = a"
+    using div_mult_mod_eq [of a b] by (simp add: assms)
+  finally show ?thesis .
+qed
+
+lemma mod_eq_0_iff_dvd:
+  "a mod b = 0 \<longleftrightarrow> b dvd a"
+  by (auto intro: mod_0_imp_dvd)
+
+lemma dvd_eq_mod_eq_0 [nitpick_unfold, code]:
+  "a dvd b \<longleftrightarrow> b mod a = 0"
+  by (simp add: mod_eq_0_iff_dvd)
+
+lemma dvd_mod_iff: 
+  assumes "c dvd b"
+  shows "c dvd a mod b \<longleftrightarrow> c dvd a"
+proof -
+  from assms have "(c dvd a mod b) \<longleftrightarrow> (c dvd ((a div b) * b + a mod b))" 
+    by (simp add: dvd_add_right_iff)
+  also have "(a div b) * b + a mod b = a"
+    using div_mult_mod_eq [of a b] by simp
+  finally show ?thesis .
+qed
+
+lemma dvd_mod_imp_dvd:
+  assumes "c dvd a mod b" and "c dvd b"
+  shows "c dvd a"
+  using assms dvd_mod_iff [of c b a] by simp
+
+lemma dvd_minus_mod [simp]:
+  "b dvd a - a mod b"
+  by (simp add: minus_mod_eq_div_mult)
+
+lemma cancel_div_mod_rules:
+  "((a div b) * b + a mod b) + c = a + c"
+  "(b * (a div b) + a mod b) + c = a + c"
+  by (simp_all add: div_mult_mod_eq mult_div_mod_eq)
+
+end
+
+text \<open>Interlude: basic tool support for algebraic and arithmetic calculations\<close>
+
+named_theorems arith "arith facts -- only ground formulas"
+ML_file "Tools/arith_data.ML"
+
+ML_file "~~/src/Provers/Arith/cancel_div_mod.ML"
+
+ML \<open>
+structure Cancel_Div_Mod_Ring = Cancel_Div_Mod
+(
+  val div_name = @{const_name divide};
+  val mod_name = @{const_name modulo};
+  val mk_binop = HOLogic.mk_binop;
+  val mk_sum = Arith_Data.mk_sum;
+  val dest_sum = Arith_Data.dest_sum;
+
+  val div_mod_eqs = map mk_meta_eq @{thms cancel_div_mod_rules};
+
+  val prove_eq_sums = Arith_Data.prove_conv2 all_tac (Arith_Data.simp_all_tac
+    @{thms diff_conv_add_uminus add_0_left add_0_right ac_simps})
+)
+\<close>
+
+simproc_setup cancel_div_mod_int ("(a::'a::semidom_modulo) + b") =
+  \<open>K Cancel_Div_Mod_Ring.proc\<close>
+
+class idom_modulo = idom + semidom_modulo
+begin
+
+subclass idom_divide ..
+
+lemma div_diff [simp]:
+  "c dvd a \<Longrightarrow> c dvd b \<Longrightarrow> (a - b) div c = a div c - b div c"
+  using div_add [of _  _ "- b"] by (simp add: dvd_neg_div)
+
+end
+
+
 class ordered_semiring = semiring + ordered_comm_monoid_add +
   assumes mult_left_mono: "a \<le> b \<Longrightarrow> 0 \<le> c \<Longrightarrow> c * a \<le> c * b"
   assumes mult_right_mono: "a \<le> b \<Longrightarrow> 0 \<le> c \<Longrightarrow> a * c \<le> b * c"
@@ -2208,6 +2326,10 @@ proof -
     by (auto simp add: abs_mult)
 qed
 
+lemma sgn_not_eq_imp:
+  "sgn a = - sgn b" if "sgn b \<noteq> sgn a" and "sgn a \<noteq> 0" and "sgn b \<noteq> 0"
+  using that by (cases "a < 0") (auto simp add: sgn_0_0 sgn_1_pos sgn_1_neg)
+
 lemma abs_dvd_iff [simp]: "\<bar>m\<bar> dvd k \<longleftrightarrow> m dvd k"
   by (simp add: abs_if)
 
@@ -2240,6 +2362,10 @@ lemma less_minus_iff_1 [simp, no_atp]: "1 < - b \<longleftrightarrow> b < - 1"
 
 lemma minus_less_iff_1 [simp, no_atp]: "- a < 1 \<longleftrightarrow> - 1 < a"
   by (fact minus_less_iff)
+
+lemma add_less_zeroD:
+  shows "x+y < 0 \<Longrightarrow> x<0 \<or> y<0"
+  by (auto simp: not_less intro: le_less_trans [of _ "x+y"])
 
 end
 

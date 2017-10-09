@@ -1510,21 +1510,6 @@ lemma Gcd_singleton [simp]: "Gcd {a} = normalize a"
 lemma Gcd_2 [simp]: "Gcd {a, b} = gcd a b"
   by simp
 
-
-definition pairwise_coprime
-  where "pairwise_coprime A = (\<forall>x y. x \<in> A \<and> y \<in> A \<and> x \<noteq> y \<longrightarrow> coprime x y)"
-
-lemma pairwise_coprimeI [intro?]:
-  "(\<And>x y. x \<in> A \<Longrightarrow> y \<in> A \<Longrightarrow> x \<noteq> y \<Longrightarrow> coprime x y) \<Longrightarrow> pairwise_coprime A"
-  by (simp add: pairwise_coprime_def)
-
-lemma pairwise_coprimeD:
-  "pairwise_coprime A \<Longrightarrow> x \<in> A \<Longrightarrow> y \<in> A \<Longrightarrow> x \<noteq> y \<Longrightarrow> coprime x y"
-  by (simp add: pairwise_coprime_def)
-
-lemma pairwise_coprime_subset: "pairwise_coprime A \<Longrightarrow> B \<subseteq> A \<Longrightarrow> pairwise_coprime B"
-  by (force simp: pairwise_coprime_def)
-
 end
 
 
@@ -1995,11 +1980,7 @@ lemma gcd_mult_distrib_nat: "k * gcd m n = gcd (k * m) (k * n)"
 
 lemma gcd_mult_distrib_int: "\<bar>k\<bar> * gcd m n = gcd (k * m) (k * n)"
   for k m n :: int
-  apply (subst (1 2) gcd_abs_int)
-  apply (subst (1 2) abs_mult)
-  apply (rule gcd_mult_distrib_nat [transferred])
-    apply auto
-  done
+  by (simp add: gcd_int_def abs_mult nat_mult_distrib gcd_mult_distrib_nat [symmetric])
 
 lemma coprime_crossproduct_nat:
   fixes a b c d :: nat
@@ -2036,11 +2017,11 @@ lemma gcd_diff2_nat: "n \<ge> m \<Longrightarrow> gcd (n - m) n = gcd m n"
 lemma gcd_non_0_int: "y > 0 \<Longrightarrow> gcd x y = gcd y (x mod y)"
   for x y :: int
   apply (frule_tac b = y and a = x in pos_mod_sign)
-  apply (simp del: pos_mod_sign add: gcd_int_def abs_if nat_mod_distrib)
+  apply (simp del: Euclidean_Division.pos_mod_sign add: gcd_int_def abs_if nat_mod_distrib)
   apply (auto simp add: gcd_non_0_nat nat_mod_distrib [symmetric] zmod_zminus1_eq_if)
   apply (frule_tac a = x in pos_mod_bound)
   apply (subst (1 2) gcd.commute)
-  apply (simp del: pos_mod_bound add: nat_diff_distrib gcd_diff2_nat nat_le_eq_zle)
+  apply (simp del: Euclidean_Division.pos_mod_bound add: nat_diff_distrib gcd_diff2_nat nat_le_eq_zle)
   done
 
 lemma gcd_red_int: "gcd x y = gcd y (x mod y)"
@@ -2480,10 +2461,7 @@ lemma lcm_pos_nat: "m > 0 \<Longrightarrow> n > 0 \<Longrightarrow> lcm m n > 0"
 
 lemma lcm_pos_int: "m \<noteq> 0 \<Longrightarrow> n \<noteq> 0 \<Longrightarrow> lcm m n > 0"
   for m n :: int
-  apply (subst lcm_abs_int)
-  apply (rule lcm_pos_nat [transferred])
-     apply auto
-  done
+  by (simp add: lcm_int_def lcm_pos_nat)
 
 lemma dvd_pos_nat: "n > 0 \<Longrightarrow> m dvd n \<Longrightarrow> m > 0"  (* FIXME move *)
   for m n :: nat
