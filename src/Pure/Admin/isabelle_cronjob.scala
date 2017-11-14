@@ -122,11 +122,12 @@ object Isabelle_Cronjob
     args: String = "",
     afp: Boolean = false,
     slow: Boolean = false,
+    more_hosts: List[String] = Nil,
     detect: SQL.Source = "")
   {
     def sql: SQL.Source =
       Build_Log.Prop.build_engine + " = " + SQL.string(Build_History.engine) + " AND " +
-      Build_Log.Prop.build_host + " = " + SQL.string(host) +
+      SQL.member(Build_Log.Prop.build_host.ident, host :: more_hosts) +
       (if (detect == "") "" else " AND " + SQL.enclose(detect))
 
     def profile: Build_Status.Profile =
@@ -242,9 +243,9 @@ object Isabelle_Cronjob
           detect = Build_Log.Settings.ML_PLATFORM + " = " + SQL.string("x86_64-windows"))),
     ) :::
     {
-      for { (host, n) <- List("lxbroy6" -> 1, "lxbroy7" -> 2) }
+      for { (n, hosts) <- List(1 -> List("lxbroy6"), 2 -> List("lxbroy8", "lxbroy7")) }
       yield {
-        List(Remote_Build("AFP", host = host,
+        List(Remote_Build("AFP", host = hosts.head, more_hosts = hosts.tail,
           options = "-m32 -M1x2 -t AFP -P" + n,
           args = "-N -X slow",
           afp = true,
@@ -264,7 +265,7 @@ object Isabelle_Cronjob
           detect = Build_Log.Prop.build_tags + " = " + SQL.string("AFP"))))
 
   private def remote_build_history(
-    rev: String, afp_rev: Option[String], i: Int, user_home: Boolean, r: Remote_Build): Logger_Task =
+    rev: String, afp_rev: Option[String], i: Int, r: Remote_Build): Logger_Task =
   {
     val task_name = "build_history-" + r.host
     Logger_Task(task_name, logger =>
@@ -274,14 +275,6 @@ object Isabelle_Cronjob
             {
               val self_update = !r.shared_home
               val push_isabelle_home = self_update && Mercurial.is_repository(Path.explode("~~"))
-
-              if (user_home && r.shared_home) {
-                ssh.execute("""
-if [ ! -e /tmp/isabelle-isatest/contrib ]
-then
-  mkdir -p /tmp/isabelle-isatest && ln -s /home/isabelle/contrib /tmp/isabelle-isatest
-fi""").check
-              }
 
               val results =
                 Build_History.remote_build_history(ssh,
@@ -293,7 +286,6 @@ fi""").check
                   rev = rev,
                   afp_rev = afp_rev,
                   options =
-                    (if (user_home && r.shared_home) " -u /tmp/isabelle-isatest" else "") +
                     " -N " + Bash.string(task_name) + (if (i < 0) "" else "_" + (i + 1).toString) +
                     " -f " + r.options,
                   args = "-o timeout=10800 " + r.args)
@@ -448,9 +440,6 @@ fi""").check
     val hg = Mercurial.repository(isabelle_repos)
     val hg_graph = hg.graph()
 
-    val user_home: String => Boolean =
-      hg_graph.all_succs(List("19b6091c2137")).contains(_)
-
     def history_base_filter(r: Remote_Build): Item => Boolean =
     {
       val base_rev = hg.id(r.history_base)
@@ -475,7 +464,7 @@ fi""").check
                     for {
                       (r, i) <- (if (seq.length <= 1) seq.map((_, -1)) else seq.zipWithIndex)
                       (rev, afp_rev) <- r.pick(logger.options, hg.id(), history_base_filter(r))
-                    } yield remote_build_history(rev, afp_rev, i, user_home(rev), r)))),
+                    } yield remote_build_history(rev, afp_rev, i, r)))),
                 Logger_Task("jenkins_logs", _ =>
                   Jenkins.download_logs(Jenkins.build_log_jobs, main_dir)),
                 Logger_Task("build_log_database",
