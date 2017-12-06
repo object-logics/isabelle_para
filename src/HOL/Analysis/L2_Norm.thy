@@ -2,7 +2,7 @@
     Author:     Brian Huffman, Portland State University
 *)
 
-section \<open>Square root of sum of squares\<close>
+section \<open>L2 Norm\<close>
 
 theory L2_Norm
 imports Complex_Main
