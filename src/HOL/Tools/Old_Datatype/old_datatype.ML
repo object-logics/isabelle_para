@@ -18,7 +18,6 @@ sig
   val check_specs: spec list -> theory -> spec list * Proof.context
   val add_datatype: config -> spec list -> theory -> string list * theory
   val add_datatype_cmd: config -> spec_cmd list -> theory -> string list * theory
-  val spec_cmd: spec_cmd parser
 end;
 
 structure Old_Datatype : OLD_DATATYPE =
@@ -793,19 +792,6 @@ fun gen_add_datatype prep_specs config raw_specs thy =
 
 val add_datatype = gen_add_datatype check_specs;
 val add_datatype_cmd = gen_add_datatype read_specs;
-
-
-(* outer syntax *)
-
-val spec_cmd =
-  Parse.type_args_constrained -- Parse.binding -- Parse.opt_mixfix --
-  (@{keyword "="} |-- Parse.enum1 "|" (Parse.binding -- Scan.repeat Parse.typ -- Parse.opt_mixfix))
-  >> (fn (((vs, t), mx), cons) => ((t, vs, mx), map Scan.triple1 cons));
-
-val _ =
-  Outer_Syntax.command @{command_keyword old_datatype} "define old-style inductive datatypes"
-    (Parse.and_list1 spec_cmd
-      >> (Toplevel.theory o (snd oo add_datatype_cmd Old_Datatype_Aux.default_config)));
 
 open Old_Datatype_Aux;
 
