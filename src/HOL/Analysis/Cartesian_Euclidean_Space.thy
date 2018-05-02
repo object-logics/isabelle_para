@@ -1919,15 +1919,13 @@ subsection\<open>Explicit vector construction from lists\<close>
 
 definition "vector l = (\<chi> i. foldr (\<lambda>x f n. fun_upd (f (n+1)) n x) l (\<lambda>n x. 0) 1 i)"
 
-lemma vector_1: "(vector[x]) $1 = x"
+lemma vector_1 [simp]: "(vector[x]) $1 = x"
   unfolding vector_def by simp
 
-lemma vector_2:
- "(vector[x,y]) $1 = x"
- "(vector[x,y] :: 'a^2)$2 = (y::'a::zero)"
+lemma vector_2 [simp]: "(vector[x,y]) $1 = x" "(vector[x,y] :: 'a^2)$2 = (y::'a::zero)"
   unfolding vector_def by simp_all
 
-lemma vector_3:
+lemma vector_3 [simp]:
  "(vector [x,y,z] ::('a::zero)^3)$1 = x"
  "(vector [x,y,z] ::('a::zero)^3)$2 = y"
  "(vector [x,y,z] ::('a::zero)^3)$3 = z"
@@ -1958,7 +1956,7 @@ lemma forall_vector_3: "(\<forall>v::'a::zero^3. P v) \<longleftrightarrow> (\<f
   done
 
 lemma bounded_linear_component_cart[intro]: "bounded_linear (\<lambda>x::real^'n. x $ k)"
-  apply (rule bounded_linearI[where K=1])
+  apply (rule bounded_linear_intro[where K=1])
   using component_le_norm_cart[of _ k] unfolding real_norm_def by auto
 
 lemma interval_split_cart:
