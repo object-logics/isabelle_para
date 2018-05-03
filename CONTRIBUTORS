@@ -6,6 +6,11 @@ listed as an author in one of the source files of this Isabelle distribution.
 Contributions to this Isabelle version
 --------------------------------------
 
+* May 2018: Jose Divasón (Universidad de la Rioja),
+  Jesús Aransay (Universidad de la Rioja), Johannes Hölzl (VU Amsterdam),
+  Fabian Immler (TUM)
+  Generalizations in the formalization of linear algebra.
+
 * May 2018: Florian Haftmann
   Consolidation of string-like types in HOL.
 
