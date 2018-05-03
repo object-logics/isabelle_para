@@ -28,50 +28,6 @@ proof -
     done
 qed
 
-lemma dim_image_eq:
-  fixes f :: "'n::euclidean_space \<Rightarrow> 'm::euclidean_space"
-  assumes lf: "linear f"
-    and fi: "inj_on f (span S)"
-  shows "dim (f ` S) = dim (S::'n::euclidean_space set)"
-proof -
-  obtain B where B: "B \<subseteq> S" "independent B" "S \<subseteq> span B" "card B = dim S"
-    using basis_exists[of S] by auto
-  then have "span S = span B"
-    using span_mono[of B S] span_mono[of S "span B"] span_span[of B] by auto
-  then have "independent (f ` B)"
-    using independent_inj_on_image[of B f] B assms by auto
-  moreover have "card (f ` B) = card B"
-    using assms card_image[of f B] subset_inj_on[of f "span S" B] B span_inc by auto
-  moreover have "(f ` B) \<subseteq> (f ` S)"
-    using B by auto
-  ultimately have "dim (f ` S) \<ge> dim S"
-    using independent_card_le_dim[of "f ` B" "f ` S"] B by auto
-  then show ?thesis
-    using dim_image_le[of f S] assms by auto
-qed
-
-lemma linear_injective_on_subspace_0:
-  assumes lf: "linear f"
-    and "subspace S"
-  shows "inj_on f S \<longleftrightarrow> (\<forall>x \<in> S. f x = 0 \<longrightarrow> x = 0)"
-proof -
-  have "inj_on f S \<longleftrightarrow> (\<forall>x \<in> S. \<forall>y \<in> S. f x = f y \<longrightarrow> x = y)"
-    by (simp add: inj_on_def)
-  also have "\<dots> \<longleftrightarrow> (\<forall>x \<in> S. \<forall>y \<in> S. f x - f y = 0 \<longrightarrow> x - y = 0)"
-    by simp
-  also have "\<dots> \<longleftrightarrow> (\<forall>x \<in> S. \<forall>y \<in> S. f (x - y) = 0 \<longrightarrow> x - y = 0)"
-    by (simp add: linear_diff[OF lf])
-  also have "\<dots> \<longleftrightarrow> (\<forall>x \<in> S. f x = 0 \<longrightarrow> x = 0)"
-    using \<open>subspace S\<close> subspace_def[of S] subspace_diff[of S] by auto
-  finally show ?thesis .
-qed
-
-lemma subspace_Inter: "\<forall>s \<in> f. subspace s \<Longrightarrow> subspace (\<Inter>f)"
-  unfolding subspace_def by auto
-
-lemma span_eq[simp]: "span s = s \<longleftrightarrow> subspace s"
-  unfolding span_def by (rule hull_eq) (rule subspace_Inter)
-
 lemma substdbasis_expansion_unique:
   assumes d: "d \<subseteq> Basis"
   shows "(\<Sum>i\<in>d. f i *\<^sub>R i) = (x::'a::euclidean_space) \<longleftrightarrow>
@@ -105,20 +61,15 @@ proof -
     moreover from * have "x = (norm x/e) *\<^sub>R y"
       by auto
     ultimately have "x \<in> span (cball 0 e)"
-      using span_mul[of y "cball 0 e" "norm x/e"] span_inc[of "cball 0 e"]
-      by (simp add: span_superset)
+      using span_scale[of y "cball 0 e" "norm x/e"]
+        span_superset[of "cball 0 e"]
+      by (simp add: span_base)
   }
   then have "span (cball 0 e) = (UNIV :: 'n::euclidean_space set)"
     by auto
   then show ?thesis
     using dim_span[of "cball (0 :: 'n::euclidean_space) e"] by (auto simp: dim_UNIV)
 qed
-
-lemma indep_card_eq_dim_span:
-  fixes B :: "'n::euclidean_space set"
-  assumes "independent B"
-  shows "finite B \<and> card B = dim (span B)"
-  using assms basis_card_eq_dim[of B "span B"] span_inc by auto
 
 lemma sum_not_0: "sum f A \<noteq> 0 \<Longrightarrow> \<exists>a \<in> A. f a \<noteq> 0"
   by (rule ccontr) auto
@@ -1217,57 +1168,6 @@ lemma convex_linear_image_eq [simp]:
     shows "\<lbrakk>linear f; inj f\<rbrakk> \<Longrightarrow> convex (f ` s) \<longleftrightarrow> convex s"
     by (metis (no_types) convex_linear_image convex_linear_vimage inj_vimage_image_eq)
 
-lemma basis_to_basis_subspace_isomorphism:
-  assumes s: "subspace (S:: ('n::euclidean_space) set)"
-    and t: "subspace (T :: ('m::euclidean_space) set)"
-    and d: "dim S = dim T"
-    and B: "B \<subseteq> S" "independent B" "S \<subseteq> span B" "card B = dim S"
-    and C: "C \<subseteq> T" "independent C" "T \<subseteq> span C" "card C = dim T"
-  shows "\<exists>f. linear f \<and> f ` B = C \<and> f ` S = T \<and> inj_on f S"
-proof -
-  from B independent_bound have fB: "finite B"
-    by blast
-  from C independent_bound have fC: "finite C"
-    by blast
-  from B(4) C(4) card_le_inj[of B C] d obtain f where
-    f: "f ` B \<subseteq> C" "inj_on f B" using \<open>finite B\<close> \<open>finite C\<close> by auto
-  from linear_independent_extend[OF B(2)] obtain g where
-    g: "linear g" "\<forall>x \<in> B. g x = f x" by blast
-  from inj_on_iff_eq_card[OF fB, of f] f(2)
-  have "card (f ` B) = card B" by simp
-  with B(4) C(4) have ceq: "card (f ` B) = card C" using d
-    by simp
-  have "g ` B = f ` B" using g(2)
-    by (auto simp: image_iff)
-  also have "\<dots> = C" using card_subset_eq[OF fC f(1) ceq] .
-  finally have gBC: "g ` B = C" .
-  have gi: "inj_on g B" using f(2) g(2)
-    by (auto simp: inj_on_def)
-  note g0 = linear_indep_image_lemma[OF g(1) fB, unfolded gBC, OF C(2) gi]
-  {
-    fix x y
-    assume x: "x \<in> S" and y: "y \<in> S" and gxy: "g x = g y"
-    from B(3) x y have x': "x \<in> span B" and y': "y \<in> span B"
-      by blast+
-    from gxy have th0: "g (x - y) = 0"
-      by (simp add: linear_diff[OF g(1)])
-    have th1: "x - y \<in> span B" using x' y'
-      by (metis span_diff)
-    have "x = y" using g0[OF th1 th0] by simp
-  }
-  then have giS: "inj_on g S" unfolding inj_on_def by blast
-  from span_subspace[OF B(1,3) s]
-  have "g ` S = span (g ` B)"
-    by (simp add: span_linear_image[OF g(1)])
-  also have "\<dots> = span C"
-    unfolding gBC ..
-  also have "\<dots> = T"
-    using span_subspace[OF C(1,3) t] .
-  finally have gS: "g ` S = T" .
-  from g(1) gS giS gBC show ?thesis
-    by blast
-qed
-
 lemma closure_bounded_linear_image_subset:
   assumes f: "bounded_linear f"
   shows "f ` closure S \<subseteq> closure (f ` S)"
@@ -1730,7 +1630,7 @@ proof -
     qed (use \<open>F \<subseteq> insert a S\<close> in auto)
   qed
   then show ?thesis
-    unfolding affine_hull_explicit span_explicit by auto
+    unfolding affine_hull_explicit span_explicit by blast
 qed
 
 lemma affine_hull_insert_span:
@@ -2004,7 +1904,7 @@ lemma cone_Inter[intro]: "\<forall>s\<in>f. cone s \<Longrightarrow> cone (\<Int
   unfolding cone_def by auto
 
 lemma subspace_imp_cone: "subspace S \<Longrightarrow> cone S"
-  by (simp add: cone_def subspace_mul)
+  by (simp add: cone_def subspace_scale)
 
 
 subsubsection \<open>Conic hull\<close>
@@ -2940,10 +2840,10 @@ lemma subspace_imp_convex: "subspace s \<Longrightarrow> convex s"
   using subspace_imp_affine affine_imp_convex by auto
 
 lemma affine_hull_subset_span: "(affine hull s) \<subseteq> (span s)"
-  by (metis hull_minimal span_inc subspace_imp_affine subspace_span)
+  by (metis hull_minimal span_superset subspace_imp_affine subspace_span)
 
 lemma convex_hull_subset_span: "(convex hull s) \<subseteq> (span s)"
-  by (metis hull_minimal span_inc subspace_imp_convex subspace_span)
+  by (metis hull_minimal span_superset subspace_imp_convex subspace_span)
 
 lemma convex_hull_subset_affine_hull: "(convex hull s) \<subseteq> (affine hull s)"
   by (metis affine_affine_hull affine_imp_convex hull_minimal hull_subset)
@@ -3050,7 +2950,7 @@ proof -
   have **: "card {x - a |x. x \<in> S - {a}} = card (S - {a})"
     by (metis (no_types, lifting) "*" card_image diff_add_cancel inj_on_def)
   have "dim {x - a |x. x \<in> S - {a}} \<le> dim S"
-    using \<open>a\<in>S\<close> by (auto simp: span_superset span_diff intro: subset_le_dim)
+    using \<open>a\<in>S\<close> by (auto simp: span_base span_diff intro: subset_le_dim)
   also have "\<dots> < dim S + 1" by auto
   also have "\<dots> \<le> card (S - {a})"
     using assms
@@ -3416,45 +3316,7 @@ proof -
   then show ?thesis by auto
 qed
 
-lemma independent_finite:
-  fixes B :: "'n::euclidean_space set"
-  assumes "independent B"
-  shows "finite B"
-  using affine_dependent_imp_dependent[of B] aff_independent_finite[of B] assms
-  by auto
-
-lemma subspace_dim_equal:
-  assumes "subspace (S :: ('n::euclidean_space) set)"
-    and "subspace T"
-    and "S \<subseteq> T"
-    and "dim S \<ge> dim T"
-  shows "S = T"
-proof -
-  obtain B where B: "B \<le> S" "independent B \<and> S \<subseteq> span B" "card B = dim S"
-    using basis_exists[of S] by metis
-  then have "span B \<subseteq> S"
-    using span_mono[of B S] span_eq[of S] assms by metis
-  then have "span B = S"
-    using B by auto
-  have "dim S = dim T"
-    using assms dim_subset[of S T] by auto
-  then have "T \<subseteq> span B"
-    using card_eq_dim[of B T] B independent_finite assms by auto
-  then show ?thesis
-    using assms \<open>span B = S\<close> by auto
-qed
-
-corollary dim_eq_span:
-  fixes S :: "'a::euclidean_space set"
-  shows "\<lbrakk>S \<subseteq> T; dim T \<le> dim S\<rbrakk> \<Longrightarrow> span S = span T"
-by (simp add: span_mono subspace_dim_equal)
-
-lemma dim_eq_full:
-    fixes S :: "'a :: euclidean_space set"
-    shows "dim S = DIM('a) \<longleftrightarrow> span S = UNIV"
-apply (rule iffI)
- apply (metis dim_eq_span dim_subset_UNIV span_Basis span_span subset_UNIV)
-by (metis dim_UNIV dim_span)
+lemmas independent_finite = independent_imp_finite
 
 lemma span_substd_basis:
   assumes d: "d \<subseteq> Basis"
@@ -3466,9 +3328,10 @@ proof -
   moreover have s: "subspace ?B"
     using subspace_substandard[of "\<lambda>i. i \<notin> d"] .
   ultimately have "span d \<subseteq> ?B"
-    using span_mono[of d "?B"] span_eq[of "?B"] by blast
+    using span_mono[of d "?B"] span_eq_iff[of "?B"] by blast
   moreover have *: "card d \<le> dim (span d)"
-    using independent_card_le_dim[of d "span d"] independent_substdbasis[OF assms] span_inc[of d]
+    using independent_card_le_dim[of d "span d"] independent_substdbasis[OF assms]
+      span_superset[of d]
     by auto
   moreover from * have "dim ?B \<le> dim (span d)"
     using dim_substandard[OF assms] by auto
@@ -3483,14 +3346,14 @@ lemma basis_to_substdbasis_subspace_isomorphism:
     f ` span B = {x. \<forall>i\<in>Basis. i \<notin> d \<longrightarrow> x \<bullet> i = 0} \<and> inj_on f (span B) \<and> d \<subseteq> Basis"
 proof -
   have B: "card B = dim B"
-    using dim_unique[of B B "card B"] assms span_inc[of B] by auto
+    using dim_unique[of B B "card B"] assms span_superset[of B] by auto
   have "dim B \<le> card (Basis :: 'a set)"
     using dim_subset_UNIV[of B] by simp
   from ex_card[OF this] obtain d :: "'a set" where d: "d \<subseteq> Basis" and t: "card d = dim B"
     by auto
   let ?t = "{x::'a::euclidean_space. \<forall>i\<in>Basis. i \<notin> d \<longrightarrow> x\<bullet>i = 0}"
   have "\<exists>f. linear f \<and> f ` B = d \<and> f ` span B = ?t \<and> inj_on f (span B)"
-  proof (intro basis_to_basis_subspace_isomorphism subspace_span subspace_substandard span_inc)
+  proof (intro basis_to_basis_subspace_isomorphism subspace_span subspace_substandard span_superset)
     show "d \<subseteq> {x. \<forall>i\<in>Basis. i \<notin> d \<longrightarrow> x \<bullet> i = 0}"
       using d inner_not_same_Basis by blast
   qed (auto simp: span_substd_basis independent_substdbasis dim_substandard d t B assms)
@@ -3775,7 +3638,7 @@ next
   have "a \<bullet> w = a \<bullet> c" if "span ((+) (- c) ` S) \<subseteq> {x. a \<bullet> x = 0}" "w \<in> S" for w
   proof -
     have "w-c \<in> span ((+) (- c) ` S)"
-      by (simp add: span_superset \<open>w \<in> S\<close>)
+      by (simp add: span_base \<open>w \<in> S\<close>)
     with that have "w-c \<in> {x. a \<bullet> x = 0}"
       by blast
     then show ?thesis
@@ -3795,10 +3658,10 @@ proof -
   have 1: "{b - a|b. b \<in> (S - {a})} \<subseteq> {x - a|x. x \<in> S}" by auto
   have 2: "x - a \<in> span {b - a |b. b \<in> S - {a}}" if "x \<in> S" for x
   proof (cases "x = a")
-    case True then show ?thesis by simp
+    case True then show ?thesis by (simp add: span_clauses)
   next
     case False then show ?thesis
-      using assms by (blast intro: span_superset that)
+      using assms by (blast intro: span_base that)
   qed
   have "\<not> affine_dependent (insert a S)"
     by (simp add: assms insert_absorb)
@@ -4800,7 +4663,7 @@ proof -
       then have "y \<in> S"
         using assms y hull_subset[of S] affine_hull_subset_span
           inj_on_image_mem_iff [OF \<open>inj_on f (span S)\<close>]
-        by (metis Int_iff span_inc subsetCE)
+        by (metis Int_iff span_superset subsetCE)
     }
     then have "z \<in> f ` (rel_interior S)"
       using mem_rel_interior_cball[of x S] \<open>e > 0\<close> x by auto
@@ -4835,7 +4698,7 @@ proof -
         using assms linear_diff[of f x xy] linear_conv_bounded_linear[of f] by auto
       moreover have *: "x - xy \<in> span S"
         using subspace_diff[of "span S" x xy] subspace_span \<open>x \<in> S\<close> xy
-          affine_hull_subset_span[of S] span_inc
+          affine_hull_subset_span[of S] span_superset
         by auto
       moreover from * have "e1 * norm (x - xy) \<le> norm (f (x - xy))"
         using e1 by auto
@@ -6331,8 +6194,10 @@ lemma connected_convex_1_gen:
   shows "connected s \<longleftrightarrow> convex s"
 proof -
   obtain f:: "'a \<Rightarrow> real" where linf: "linear f" and "inj f"
-    using subspace_isomorphism [where 'a = 'a and 'b = real]
-    by (metis DIM_real dim_UNIV subspace_UNIV assms)
+    using subspace_isomorphism[OF subspace_UNIV subspace_UNIV,
+        where 'a='a and 'b=real]
+    unfolding Euclidean_Space.dim_UNIV
+    by (auto simp: assms)
   then have "f -` (f ` s) = s"
     by (simp add: inj_vimage_image_eq)
   then show ?thesis
@@ -6340,7 +6205,7 @@ proof -
 qed
 
 lemma is_interval_cball_1[intro, simp]: "is_interval (cball a b)" for a b::real
-  by (auto simp: is_interval_convex_1 convex_cball)
+  by (simp add: is_interval_convex_1)
 
 
 subsection%unimportant \<open>Another intermediate value theorem formulation\<close>
@@ -6492,7 +6357,7 @@ proof -
   also have "\<dots> = (\<Sum>i\<in>Basis. (\<lambda>x. x *\<^sub>R i) ` (convex hull {0, 1}))"
     by (simp only: convex_hull_eq_real_cbox zero_le_one)
   also have "\<dots> = (\<Sum>i\<in>Basis. convex hull ((\<lambda>x. x *\<^sub>R i) ` {0, 1}))"
-    by (simp only: convex_hull_linear_image linear_scaleR_left)
+    by (simp add: convex_hull_linear_image)
   also have "\<dots> = convex hull (\<Sum>i\<in>Basis. (\<lambda>x. x *\<^sub>R i) ` {0, 1})"
     by (simp only: convex_hull_set_sum)
   also have "\<dots> = convex hull {x. \<forall>i\<in>Basis. x\<bullet>i \<in> {0, 1}}"

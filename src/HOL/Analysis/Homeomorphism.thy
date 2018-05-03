@@ -939,7 +939,7 @@ next
     apply (rule choose_subspace_of_subspace [of "dim ((+) (- a) ` S)" "{x::'n. i \<bullet> x = 0}"])
      apply (simp add: dim_hyperplane [OF \<open>i \<noteq> 0\<close>])
      apply (metis DIM_positive Suc_pred dd not_le not_less_eq_eq)
-    apply (metis span_eq subspace_hyperplane)
+    apply (metis span_eq_iff subspace_hyperplane)
     done
   have "subspace (span ((+) (- a) ` S))"
     using subspace_span by blast
@@ -954,7 +954,7 @@ next
   have hcont: "continuous_on A h" and kcont: "continuous_on B k" for A B
     using \<open>linear h\<close> \<open>linear k\<close> linear_continuous_on linear_conv_bounded_linear by blast+
   have ihhhh[simp]: "\<And>x. x \<in> S \<Longrightarrow> i \<bullet> h (x - a) = 0"
-    using Tsub [THEN subsetD] heq span_inc by fastforce
+    using Tsub [THEN subsetD] heq span_superset by fastforce
   have "sphere 0 1 - {i} homeomorphic {x. i \<bullet> x = 0}"
     apply (rule homeomorphic_punctured_sphere_affine)
     using i
@@ -987,8 +987,8 @@ next
     apply (simp add: homeomorphic_def homeomorphism_def)
     apply (rule_tac x="g \<circ> h" in exI)
     apply (rule_tac x="k \<circ> f" in exI)
-    apply (auto simp: ghcont kfcont span_superset homeomorphism_apply2 [OF fg] image_comp)
-    apply (force simp: o_def homeomorphism_apply2 [OF fg] span_superset)
+    apply (auto simp: ghcont kfcont span_base homeomorphism_apply2 [OF fg] image_comp)
+    apply (force simp: o_def homeomorphism_apply2 [OF fg] span_base)
     done
   finally have Shom: "S homeomorphic (g \<circ> h) ` (+) (- a) ` S" .
   show ?thesis

@@ -29,7 +29,6 @@ imports
   Finite_Map
   Float
   FSet
-  FuncSet
   Function_Division
   Fun_Lexorder
   Going_To_Filter
