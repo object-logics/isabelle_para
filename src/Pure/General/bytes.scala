@@ -10,6 +10,7 @@ package isabelle
 import java.io.{File => JFile, ByteArrayOutputStream, ByteArrayInputStream,
   OutputStream, InputStream, FileInputStream, FileOutputStream}
 import java.net.URL
+import java.util.Base64
 
 import org.tukaani.xz.{XZInputStream, XZOutputStream}
 
@@ -37,6 +38,23 @@ object Bytes
       System.arraycopy(a, offset, b, 0, length)
       new Bytes(b, 0, b.length)
     }
+
+
+  def hex(s: String): Bytes =
+  {
+    def err(): Nothing = error("Malformed hexadecimal representation of bytes\n" + s)
+    val len = s.length
+    if (len % 2 != 0) err()
+
+    val n = len / 2
+    val a = new Array[Byte](n)
+    for (i <- 0 until n) {
+      val j = 2 * i
+      try { a(i) = Integer.parseInt(s.substring(j, j + 2), 16).toByte }
+      catch { case _: NumberFormatException => err() }
+    }
+    new Bytes(a, 0, n)
+  }
 
 
   /* read */
@@ -133,6 +151,14 @@ final class Bytes private(
 
   def text: String =
     UTF8.decode_chars(s => s, bytes, offset, offset + length).toString
+
+  def base64: String =
+  {
+    val b =
+      if (offset == 0 && length == bytes.length) bytes
+      else Bytes(bytes, offset, length).bytes
+    Base64.getEncoder.encodeToString(b)
+  }
 
   override def toString: String =
   {
