@@ -5607,15 +5607,25 @@ lemma sorted_list_of_set_eq_Nil_iff [simp]:
   "finite A \<Longrightarrow> sorted_list_of_set A = [] \<longleftrightarrow> A = {}"
 by (auto simp: sorted_list_of_set.remove)
 
-lemma sorted_list_of_set [simp]:
-  "finite A \<Longrightarrow> set (sorted_list_of_set A) = A \<and> sorted (sorted_list_of_set A)
-    \<and> distinct (sorted_list_of_set A)"
-by(induct A rule: finite_induct)
-  (simp_all add: set_insort_key sorted_insort distinct_insort)
+lemma set_sorted_list_of_set [simp]:
+  "finite A \<Longrightarrow> set (sorted_list_of_set A) = A"
+by(induct A rule: finite_induct) (simp_all add: set_insort_key)
 
-lemma distinct_sorted_list_of_set:
-  "distinct (sorted_list_of_set A)"
-using sorted_list_of_set by (cases "finite A") auto
+lemma sorted_sorted_list_of_set [simp]: "sorted (sorted_list_of_set A)"
+proof (cases "finite A")
+  case True thus ?thesis by(induction A) (simp_all add: sorted_insort)
+next
+  case False thus ?thesis by simp
+qed
+
+lemma distinct_sorted_list_of_set [simp]: "distinct (sorted_list_of_set A)"
+proof (cases "finite A")
+  case True thus ?thesis by(induction A) (simp_all add: distinct_insort)
+next
+  case False thus ?thesis by simp
+qed
+
+lemmas sorted_list_of_set = set_sorted_list_of_set sorted_sorted_list_of_set distinct_sorted_list_of_set
 
 lemma sorted_list_of_set_sort_remdups [code]:
   "sorted_list_of_set (set xs) = sort (remdups xs)"
@@ -6048,7 +6058,7 @@ lemma lexord_linear: "(\<forall>a b. (a,b)\<in> r \<or> a = b \<or> (b,a) \<in> 
 
 lemma lexord_irrefl:
   "irrefl R \<Longrightarrow> irrefl (lexord R)"
-  by (simp add: irrefl_def lexord_irreflexive)
+by (simp add: irrefl_def lexord_irreflexive)
 
 lemma lexord_asym:
   assumes "asym R"
