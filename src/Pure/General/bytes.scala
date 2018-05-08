@@ -56,6 +56,12 @@ object Bytes
     new Bytes(a, 0, n)
   }
 
+  def base64(s: String): Bytes =
+  {
+    val a = Base64.getDecoder.decode(s)
+    new Bytes(a, 0, a.length)
+  }
+
 
   /* read */
 
@@ -158,6 +164,12 @@ final class Bytes private(
       if (offset == 0 && length == bytes.length) bytes
       else Bytes(bytes, offset, length).bytes
     Base64.getEncoder.encodeToString(b)
+  }
+
+  def maybe_base64: (Boolean, String) =
+  {
+    val s = text
+    if (this == Bytes(s)) (false, s) else (true, base64)
   }
 
   override def toString: String =
