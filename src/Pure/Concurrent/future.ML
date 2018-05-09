@@ -34,6 +34,10 @@ sig
   val forked_results: {name: string, deps: Task_Queue.task list} ->
     (unit -> 'a) list -> 'a Exn.result list
   val task_context: string -> group -> ('a -> 'b) -> 'a -> 'b
+  val enabled: unit -> bool
+  val relevant: 'a list -> bool
+  val proofs_enabled: int -> bool
+  val proofs_enabled_timing: Time.time -> bool
   val value_result: 'a Exn.result -> 'a future
   val value: 'a -> 'a future
   val cond_forks: params -> (unit -> 'a) list -> 'a future list
@@ -171,10 +175,10 @@ val ML_statistics = Unsynchronized.ref false;
 fun report_status () = (*requires SYNCHRONIZED*)
   if ! ML_statistics then
     let
-      val {ready, pending, running, passive, urgent} = Task_Queue.status (! queue);
-      val total = length (! workers);
-      val active = count_workers Working;
-      val waiting = count_workers Waiting;
+      val {ready, pending, running, passive, urgent, total} = Task_Queue.status (! queue);
+      val workers_total = length (! workers);
+      val workers_active = count_workers Working;
+      val workers_waiting = count_workers Waiting;
       val stats =
        [("now", Value.print_real (Time.toReal (Time.now ()))),
         ("tasks_ready", Value.print_int ready),
@@ -182,9 +186,10 @@ fun report_status () = (*requires SYNCHRONIZED*)
         ("tasks_running", Value.print_int running),
         ("tasks_passive", Value.print_int passive),
         ("tasks_urgent", Value.print_int urgent),
-        ("workers_total", Value.print_int total),
-        ("workers_active", Value.print_int active),
-        ("workers_waiting", Value.print_int waiting)] @
+        ("tasks_total", Value.print_int total),
+        ("workers_total", Value.print_int workers_total),
+        ("workers_active", Value.print_int workers_active),
+        ("workers_waiting", Value.print_int workers_waiting)] @
         ML_Statistics.get ();
     in Output.try_protocol_message (Markup.ML_statistics :: stats) [] end
   else ();
@@ -576,6 +581,22 @@ fun task_context name group f x =
     end);
 
 
+(* scheduling parameters *)
+
+fun enabled () =
+  Multithreading.max_threads () > 1 andalso
+    let val lim = Options.default_int "parallel_limit"
+    in lim <= 0 orelse SYNCHRONIZED "enabled" (fn () => Task_Queue.total_jobs (! queue) < lim) end;
+
+val relevant = (fn [] => false | [_] => false | _ => enabled ());
+
+fun proofs_enabled n =
+  ! Multithreading.parallel_proofs >= n andalso is_some (worker_task ()) andalso enabled ();
+
+fun proofs_enabled_timing t =
+  proofs_enabled 1 andalso Time.toReal t >= Options.default_real "parallel_subproofs_threshold";
+
+
 (* fast-path operations -- bypass task queue if possible *)
 
 fun value_result (res: 'a Exn.result) =
@@ -589,7 +610,7 @@ fun value_result (res: 'a Exn.result) =
 fun value x = value_result (Exn.Res x);
 
 fun cond_forks args es =
-  if Multithreading.enabled () then forks args es
+  if enabled () then forks args es
   else map (fn e => value_result (Exn.interruptible_capture e ())) es;
 
 fun map_future f x =
