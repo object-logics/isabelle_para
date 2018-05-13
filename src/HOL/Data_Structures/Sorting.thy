@@ -292,23 +292,23 @@ subsubsection "Time Complexity"
 
 fun c_merge_adj :: "('a::linorder) list list \<Rightarrow> nat" where
 "c_merge_adj [] = 0" |
-"c_merge_adj [x] = 0" |
-"c_merge_adj (x # y # zs) = c_merge x y + c_merge_adj zs"
+"c_merge_adj [xs] = 0" |
+"c_merge_adj (xs # ys # zss) = c_merge xs ys + c_merge_adj zss"
 
 fun c_merge_all :: "('a::linorder) list list \<Rightarrow> nat" where
 "c_merge_all [] = undefined" |
-"c_merge_all [x] = 0" |
-"c_merge_all xs = c_merge_adj xs + c_merge_all (merge_adj xs)"
+"c_merge_all [xs] = 0" |
+"c_merge_all xss = c_merge_adj xss + c_merge_all (merge_adj xss)"
 
 definition c_msort_bu :: "('a::linorder) list \<Rightarrow> nat" where
 "c_msort_bu xs = (if xs = [] then 0 else c_merge_all (map (\<lambda>x. [x]) xs))"
 
 lemma length_merge_adj:
-  "\<lbrakk> even(length xs); \<forall>x \<in> set xs. length x = m \<rbrakk> \<Longrightarrow> \<forall>x \<in> set (merge_adj xs). length x = 2*m"
-by(induction xs rule: merge_adj.induct) (auto simp: length_merge)
+  "\<lbrakk> even(length xss); \<forall>x \<in> set xss. length x = m \<rbrakk> \<Longrightarrow> \<forall>xs \<in> set (merge_adj xss). length xs = 2*m"
+by(induction xss rule: merge_adj.induct) (auto simp: length_merge)
 
-lemma c_merge_adj: "\<forall>x \<in> set xs. length x = m \<Longrightarrow> c_merge_adj xs \<le> m * length xs"
-proof(induction xs rule: c_merge_adj.induct)
+lemma c_merge_adj: "\<forall>xs \<in> set xss. length xs = m \<Longrightarrow> c_merge_adj xss \<le> m * length xss"
+proof(induction xss rule: c_merge_adj.induct)
   case 1 thus ?case by simp
 next
   case 2 thus ?case by simp
@@ -316,24 +316,24 @@ next
   case (3 x y) thus ?case using c_merge_ub[of x y] by (simp add: algebra_simps)
 qed
 
-lemma c_merge_all: "\<lbrakk> \<forall>x \<in> set xs. length x = m; length xs = 2^k \<rbrakk>
-  \<Longrightarrow> c_merge_all xs \<le> m * k * 2^k"
-proof (induction xs arbitrary: k m rule: c_merge_all.induct)
+lemma c_merge_all: "\<lbrakk> \<forall>xs \<in> set xss. length xs = m; length xss = 2^k \<rbrakk>
+  \<Longrightarrow> c_merge_all xss \<le> m * k * 2^k"
+proof (induction xss arbitrary: k m rule: c_merge_all.induct)
   case 1 thus ?case by simp
 next
   case 2 thus ?case by simp
 next
-  case (3 x y xs)
-  let ?xs = "x # y # xs"
-  let ?xs2 = "merge_adj ?xs"
+  case (3 xs ys xss)
+  let ?xss = "xs # ys # xss"
+  let ?xss2 = "merge_adj ?xss"
   obtain k' where k': "k = Suc k'" using "3.prems"(2)
     by (metis length_Cons nat.inject nat_power_eq_Suc_0_iff nat.exhaust)
-  have "even (length xs)" using "3.prems"(2) even_Suc_Suc_iff by fastforce
+  have "even (length xss)" using "3.prems"(2) even_Suc_Suc_iff by fastforce
   from "3.prems"(1) length_merge_adj[OF this]
-  have *: "\<forall>x \<in> set(merge_adj ?xs). length x = 2*m" by(auto simp: length_merge)
-  have **: "length ?xs2 = 2 ^ k'" using "3.prems"(2) k' by auto
-  have "c_merge_all ?xs = c_merge_adj ?xs + c_merge_all ?xs2" by simp
-  also have "\<dots> \<le> m * 2^k + c_merge_all ?xs2"
+  have *: "\<forall>x \<in> set(merge_adj ?xss). length x = 2*m" by(auto simp: length_merge)
+  have **: "length ?xss2 = 2 ^ k'" using "3.prems"(2) k' by auto
+  have "c_merge_all ?xss = c_merge_adj ?xss + c_merge_all ?xss2" by simp
+  also have "\<dots> \<le> m * 2^k + c_merge_all ?xss2"
     using "3.prems"(2) c_merge_adj[OF "3.prems"(1)] by (auto simp: algebra_simps)
   also have "\<dots> \<le> m * 2^k + (2*m) * k' * 2^k'"
     using "3.IH"[OF * **] by simp
