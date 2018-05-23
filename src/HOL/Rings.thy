@@ -137,7 +137,7 @@ definition dvd :: "'a \<Rightarrow> 'a \<Rightarrow> bool" (infix "dvd" 50)
 lemma dvdI [intro?]: "a = b * k \<Longrightarrow> b dvd a"
   unfolding dvd_def ..
 
-lemma dvdE [elim?]: "b dvd a \<Longrightarrow> (\<And>k. a = b * k \<Longrightarrow> P) \<Longrightarrow> P"
+lemma dvdE [elim]: "b dvd a \<Longrightarrow> (\<And>k. a = b * k \<Longrightarrow> P) \<Longrightarrow> P"
   unfolding dvd_def by blast
 
 end
@@ -1682,6 +1682,10 @@ lemma minus_mod_eq_div_mult: "a - a mod b = a div b * b"
 lemma minus_mod_eq_mult_div: "a - a mod b = b * (a div b)"
   by (rule add_implies_diff [symmetric]) (fact mult_div_mod_eq)
 
+lemma [nitpick_unfold]:
+  "a mod b = a - a div b * b"
+  by (fact minus_div_mult_eq_mod [symmetric])
+
 end
 
 
@@ -1712,7 +1716,7 @@ lemma dvd_imp_mod_0 [simp]:
   "b mod a = 0" if "a dvd b"
   using that minus_div_mult_eq_mod [of b a] by simp
 
-lemma mod_0_imp_dvd: 
+lemma mod_0_imp_dvd [dest!]: 
   "b dvd a" if "a mod b = 0"
 proof -
   have "b dvd (a div b) * b" by simp
