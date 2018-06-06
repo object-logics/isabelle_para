@@ -24,7 +24,7 @@ sig
   val command_exec: state -> string -> Document_ID.command -> Command.exec option
   val remove_versions: Document_ID.version list -> state -> state
   val start_execution: state -> state
-  val update: Document_ID.version -> Document_ID.version -> edit list -> bool -> state ->
+  val update: Document_ID.version -> Document_ID.version -> edit list -> string list -> state ->
     Document_ID.exec list * (Document_ID.command * Document_ID.exec list) list * state
   val state: unit -> state
   val change_state: (state -> state) -> unit
@@ -314,17 +314,20 @@ type blob_digest = (string * string option) Exn.result;  (*file node name, raw d
 type execution =
  {version_id: Document_ID.version,  (*static version id*)
   execution_id: Document_ID.execution,  (*dynamic execution id*)
-  delay_request: unit future};  (*pending event timer request*)
+  delay_request: unit future,  (*pending event timer request*)
+  parallel_prints: Command.exec list};  (*parallel prints for early execution*)
 
 val no_execution: execution =
   {version_id = Document_ID.none,
    execution_id = Document_ID.none,
-   delay_request = Future.value ()};
+   delay_request = Future.value (),
+   parallel_prints = []};
 
-fun new_execution version_id delay_request : execution =
+fun new_execution version_id delay_request parallel_prints : execution =
   {version_id = version_id,
    execution_id = Execution.start (),
-   delay_request = delay_request};
+   delay_request = delay_request,
+   parallel_prints = parallel_prints};
 
 abstype state = State of
  {versions: version Inttab.table,  (*version id -> document content*)
@@ -347,12 +350,23 @@ val init_state =
 
 (* document versions *)
 
-fun define_version version_id version =
+fun parallel_prints_node node =
+  iterate_entries (fn (_, opt_exec) => fn rev_result =>
+    (case opt_exec of
+      SOME (eval, prints) =>
+        (case filter Command.parallel_print prints of
+          [] => SOME rev_result
+        | prints' => SOME ((eval, prints') :: rev_result))
+    | NONE => NONE)) node [] |> rev;
+
+fun define_version version_id version assigned_nodes =
   map_state (fn (versions, blobs, commands, {delay_request, ...}) =>
     let
-      val versions' = Inttab.update_new (version_id, version) versions
+      val version' = fold put_node assigned_nodes version;
+      val versions' = Inttab.update_new (version_id, version') versions
         handle Inttab.DUP dup => err_dup "document version" dup;
-      val execution' = new_execution version_id delay_request;
+      val parallel_prints = maps (parallel_prints_node o #2) assigned_nodes;
+      val execution' = new_execution version_id delay_request parallel_prints;
     in (versions', blobs, commands, execution') end);
 
 fun the_version (State {versions, ...}) version_id =
@@ -479,12 +493,16 @@ fun make_required nodes =
 fun start_execution state = state |> map_state (fn (versions, blobs, commands, execution) =>
   timeit "Document.start_execution" (fn () =>
     let
-      val {version_id, execution_id, delay_request} = execution;
+      val {version_id, execution_id, delay_request, parallel_prints} = execution;
 
       val delay = seconds (Options.default_real "editor_execution_delay");
 
       val _ = Future.cancel delay_request;
       val delay_request' = Event_Timer.future (Time.now () + delay);
+      val delay = Future.task_of delay_request';
+
+      val parallel_prints' = parallel_prints
+        |> map_filter (Command.exec_parallel_prints execution_id [delay]);
 
       fun finished_import (name, (node, _)) =
         finished_result node orelse is_some (Thy_Info.lookup_theory name);
@@ -497,7 +515,7 @@ fun start_execution state = state |> map_state (fn (versions, blobs, commands, e
             if Symtab.defined required name orelse visible_node node orelse pending_result node then
               let
                 fun body () =
-                 (Execution.worker_task_active true;
+                 (Execution.worker_task_active true name;
                   if forall finished_import deps then
                     iterate_entries (fn (_, opt_exec) => fn () =>
                       (case opt_exec of
@@ -507,23 +525,22 @@ fun start_execution state = state |> map_state (fn (versions, blobs, commands, e
                           else NONE
                       | NONE => NONE)) node ()
                   else ();
-                  Execution.worker_task_active false)
+                  Execution.worker_task_active false name)
                   handle exn =>
                    (Output.system_message (Runtime.exn_message exn);
-                    Execution.worker_task_active false;
+                    Execution.worker_task_active false name;
                     Exn.reraise exn);
                 val future =
                   (singleton o Future.forks)
                    {name = "theory:" ^ name,
                     group = SOME (Future.new_group NONE),
-                    deps =
-                      Future.task_of delay_request' :: Execution.active_tasks name @
-                        maps (the_list o #2 o #2) deps,
+                    deps = delay :: Execution.active_tasks name @ maps (the_list o #2 o #2) deps,
                     pri = 0, interrupts = false} body;
               in (node, SOME (Future.task_of future)) end
             else (node, NONE));
       val execution' =
-        {version_id = version_id, execution_id = execution_id, delay_request = delay_request'};
+        {version_id = version_id, execution_id = execution_id,
+          delay_request = delay_request', parallel_prints = parallel_prints'};
     in (versions, blobs, commands, execution') end));
 
 
@@ -672,13 +689,16 @@ fun print_consolidation options the_command_span node_name (assign_update, node)
   (case finished_result_theory node of
     SOME (result_id, thy) =>
       let
-        val eval_ids =
-          iterate_entries (fn (_, opt_exec) => fn eval_ids =>
-            (case opt_exec of
-              SOME (eval, _) => SOME (cons (Command.eval_exec_id eval) eval_ids)
-            | NONE => NONE)) node [];
+        val active_tasks =
+          (node, false) |-> iterate_entries (fn (_, opt_exec) => fn active =>
+            if active then NONE
+            else
+              (case opt_exec of
+                NONE => NONE
+              | SOME (eval, _) =>
+                  SOME (not (null (Execution.snapshot [Command.eval_exec_id eval])))));
       in
-        if null (Execution.snapshot eval_ids) then
+        if not active_tasks then
           let
             val consolidation =
               if Options.bool options "editor_presentation" then
@@ -748,6 +768,7 @@ fun update old_version_id new_version_id edits consolidate state =
       timeit "Document.edit_nodes"
         (fn () => old_version |> fold edit_nodes edits |> edit_keywords edits);
 
+    val consolidate = Symtab.defined (Symtab.make_set consolidate);
     val nodes = nodes_of new_version;
     val required = make_required nodes;
     val required0 = make_required (nodes_of old_version);
@@ -766,7 +787,7 @@ fun update old_version_id new_version_id edits consolidate state =
                     val root_theory = check_root_theory node;
                     val keywords = the_default (Session.get_keywords ()) (get_keywords node);
 
-                    val maybe_consolidate = consolidate andalso could_consolidate node;
+                    val maybe_consolidate = consolidate name andalso could_consolidate node;
                     val imports = map (apsnd Future.join) deps;
                     val imports_result_changed = exists (#4 o #1 o #2) imports;
                     val node_required = Symtab.defined required name;
@@ -838,7 +859,7 @@ fun update old_version_id new_version_id edits consolidate state =
     val assigned_nodes = map_filter #3 updated;
 
     val state' = state
-      |> define_version new_version_id (fold put_node assigned_nodes new_version);
+      |> define_version new_version_id new_version assigned_nodes;
 
   in (removed, assign_result, state') end);
 
