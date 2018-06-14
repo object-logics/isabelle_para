@@ -160,8 +160,8 @@ by(simp add: delete_def bal_tree\<^sub>d_del)
 
 subsection \<open>Overall Correctness\<close>
 
-interpretation Map_by_Ordered
-where empty = Leaf and lookup = lookup and update = update and delete = delete
+interpretation M: Map_by_Ordered
+where empty = empty and lookup = lookup and update = update and delete = delete
 and inorder = inorder and inv = bal
 proof (standard, goal_cases)
   case 2 thus ?case by(simp add: lookup_map_of)
@@ -173,6 +173,6 @@ next
   case 6 thus ?case by(simp add: bal_update)
 next
   case 7 thus ?case by(simp add: bal_delete)
-qed simp+
+qed (simp add: empty_def)+
 
 end

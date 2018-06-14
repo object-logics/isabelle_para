@@ -42,11 +42,11 @@ lemma inorder_delete:
   "sorted1(inorder t) \<Longrightarrow> inorder(delete x t) = del_list x (inorder t)"
 by(induction t) (auto simp: del_list_simps split_minD split: prod.splits)
 
-interpretation Map_by_Ordered
-where empty = Leaf and lookup = lookup and update = update and delete = delete
+interpretation M: Map_by_Ordered
+where empty = empty and lookup = lookup and update = update and delete = delete
 and inorder = inorder and inv = "\<lambda>_. True"
 proof (standard, goal_cases)
-  case 1 show ?case by simp
+  case 1 show ?case by (simp add: empty_def)
 next
   case 2 thus ?case by(simp add: lookup_map_of)
 next

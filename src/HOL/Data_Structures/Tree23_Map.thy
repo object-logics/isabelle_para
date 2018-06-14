@@ -119,19 +119,23 @@ by(simp add: delete_def bal_tree\<^sub>d_del)
 
 subsection \<open>Overall Correctness\<close>
 
-interpretation Map_by_Ordered
-where empty = Leaf and lookup = lookup and update = update and delete = delete
+interpretation M: Map_by_Ordered
+where empty = empty and lookup = lookup and update = update and delete = delete
 and inorder = inorder and inv = bal
 proof (standard, goal_cases)
+  case 1 thus ?case by(simp add: empty_def)
+next
   case 2 thus ?case by(simp add: lookup_map_of)
 next
   case 3 thus ?case by(simp add: inorder_update)
 next
   case 4 thus ?case by(simp add: inorder_delete)
 next
+  case 5 thus ?case by(simp add: empty_def)
+next
   case 6 thus ?case by(simp add: bal_update)
 next
   case 7 thus ?case by(simp add: bal_delete)
-qed simp+
+qed
 
 end

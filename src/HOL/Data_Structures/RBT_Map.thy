@@ -104,11 +104,11 @@ qed auto
 theorem rbt_delete: "rbt t \<Longrightarrow> rbt (delete k t)"
 by (metis delete_def rbt_def color_paint_Black del_invc_invh invc_paint_Black invc2I invh_paint)
 
-interpretation Map_by_Ordered
-where empty = Leaf and lookup = lookup and update = update and delete = delete
+interpretation M: Map_by_Ordered
+where empty = empty and lookup = lookup and update = update and delete = delete
 and inorder = inorder and inv = rbt
 proof (standard, goal_cases)
-  case 1 show ?case by simp
+  case 1 show ?case by (simp add: empty_def)
 next
   case 2 thus ?case by(simp add: lookup_map_of)
 next
@@ -116,7 +116,7 @@ next
 next
   case 4 thus ?case by(simp add: inorder_delete)
 next
-  case 5 thus ?case by (simp add: rbt_Leaf) 
+  case 5 thus ?case by (simp add: rbt_def empty_def) 
 next
   case 6 thus ?case by (simp add: rbt_update) 
 next
