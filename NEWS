@@ -7,17 +7,20 @@ Isabelle NEWS -- history of user-relevant changes
 New in this Isabelle version
 ----------------------------
 
-*** System ***
+*** General ***
 
-* Isabelle server command "use_theories" supports "nodes_status_delay"
-for continuous output of node status information. The time interval is
-specified in seconds; a negative value means it is disabled (default).
+* Old-style inner comments (* ... *) within the term language are no
+longer supported (legacy feature in Isabelle2018).
 
 
 *** Isar ***
 
 * More robust treatment of structural errors: begin/end blocks take
 precedence over goal/proof.
+
+* Implicit cases goal1, goal2, goal3, etc. have been discontinued
+(legacy feature since Isabelle2016).
+
 
 
 *** HOL ***
@@ -34,6 +37,9 @@ provers, has been updated.
 * Facts sum_mset.commute and prod_mset.commute renamed to sum_mset.swap
 and prod_mset.swap, similarly to sum.swap and prod.swap.
 INCOMPATIBILITY.
+
+* Theory "HOL-Library.Multiset": the <Union># operator now has the same
+precedence as any other prefix function symbol.
 
 
 *** ML ***
@@ -64,7 +70,11 @@ observes the official standard).
 
 *** System ***
 
-* Isabelle Server message "use_theories" terminates more robustly in the
+* Isabelle server command "use_theories" supports "nodes_status_delay"
+for continuous output of node status information. The time interval is
+specified in seconds; a negative value means it is disabled (default).
+
+* Isabelle Server command "use_theories" terminates more robustly in the
 presence of structurally broken sources: full consolidation of theories
 is no longer required.
 

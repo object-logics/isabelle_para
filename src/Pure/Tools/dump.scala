@@ -95,7 +95,7 @@ object Dump
     commit_cleanup_delay: Time = Headless.default_commit_cleanup_delay,
     watchdog_timeout: Time = Headless.default_watchdog_timeout,
     system_mode: Boolean = false,
-    selection: Sessions.Selection = Sessions.Selection.empty): Process_Result =
+    selection: Sessions.Selection = Sessions.Selection.empty): Boolean =
   {
     if (Build.build_logic(options, logic, build_heap = true, progress = progress,
       dirs = dirs ::: select_dirs, system_mode = system_mode) != 0) error(logic + " FAILED")
@@ -112,7 +112,9 @@ object Dump
     val include_sessions =
       deps.sessions_structure.imports_topological_order
 
-    val use_theories = deps.used_theories_condition(progress.echo_warning).map(_.theory)
+    val use_theories =
+      for { (_, name) <- deps.used_theories_condition(dump_options, progress.echo_warning) }
+      yield name.theory
 
 
     /* dump aspects asynchronously */
@@ -165,12 +167,16 @@ object Dump
         commit_cleanup_delay = commit_cleanup_delay,
         watchdog_timeout = watchdog_timeout)
 
-    val session_result = session.stop()
+    session.stop()
 
     val consumer_ok = Consumer.shutdown()
 
-    if (use_theories_result.ok && consumer_ok) session_result
-    else session_result.error_rc
+    use_theories_result.nodes_pending match {
+      case Nil =>
+      case pending => error("Pending theories " + commas_quote(pending.map(p => p._1.toString)))
+    }
+
+    use_theories_result.ok && consumer_ok
   }
 
 
@@ -243,7 +249,7 @@ Usage: isabelle dump [OPTIONS] [SESSIONS ...]
 
       val progress = new Console_Progress(verbose = verbose)
 
-      val result =
+      val ok =
         progress.interrupt_handler {
           dump(options, logic,
             aspects = aspects,
@@ -264,8 +270,6 @@ Usage: isabelle dump [OPTIONS] [SESSIONS ...]
               sessions = sessions))
         }
 
-      progress.echo(result.timing.message_resources)
-
-      sys.exit(result.rc)
+      if (!ok) sys.exit(2)
     })
 }
