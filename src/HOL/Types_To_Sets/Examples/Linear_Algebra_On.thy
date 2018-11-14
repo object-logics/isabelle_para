@@ -3,10 +3,9 @@
 *)
 theory Linear_Algebra_On
   imports
-    "../Types_To_Sets"
     "Prerequisites"
+    "../Types_To_Sets"
     Linear_Algebra_On_With
-  keywords "lemmas_with"::thy_decl
 begin
 
 subsection \<open>Rewrite rules to make \<open>ab_group_add\<close> operations implicit.\<close>
@@ -17,21 +16,22 @@ lemmas [implicit_ab_group_add] = sum_with[symmetric]
 
 lemma semigroup_add_on_with_eq[implicit_ab_group_add]:
   "semigroup_add_on_with S ((+)::_::semigroup_add \<Rightarrow> _) \<longleftrightarrow> (\<forall>a\<in>S. \<forall>b\<in>S. a + b \<in> S)"
-  by (simp add: semigroup_add_on_with_def ac_simps)
+  by (simp add: semigroup_add_on_with_Ball_def ac_simps)
 
 lemma ab_semigroup_add_on_with_eq[implicit_ab_group_add]:
   "ab_semigroup_add_on_with S ((+)::_::ab_semigroup_add \<Rightarrow> _) = semigroup_add_on_with S (+)"
-  unfolding ab_semigroup_add_on_with_def
+  unfolding ab_semigroup_add_on_with_Ball_def
   by (simp add: semigroup_add_on_with_eq ac_simps)
 
 lemma comm_monoid_add_on_with_eq[implicit_ab_group_add]:
   "comm_monoid_add_on_with S ((+)::_::comm_monoid_add \<Rightarrow> _) 0 \<longleftrightarrow> semigroup_add_on_with S (+) \<and> 0 \<in> S"
-  unfolding comm_monoid_add_on_with_def
+  unfolding comm_monoid_add_on_with_Ball_def
   by (simp add: ab_semigroup_add_on_with_eq ac_simps)
 
 lemma ab_group_add_on_with[implicit_ab_group_add]:
-  "ab_group_add_on_with S ((+)::_::ab_group_add \<Rightarrow> _) 0 (-) uminus \<longleftrightarrow> comm_monoid_add_on_with S (+) 0"
-  unfolding ab_group_add_on_with_def
+  "ab_group_add_on_with S ((+)::_::ab_group_add \<Rightarrow> _) 0 (-) uminus \<longleftrightarrow>
+    comm_monoid_add_on_with S (+) 0 \<and> (\<forall>a\<in>S. -a\<in>S)"
+  unfolding ab_group_add_on_with_Ball_def
   by simp
 
 subsection \<open>Definitions \<^emph>\<open>on\<close> carrier set\<close>
@@ -51,6 +51,9 @@ lemma S_ne: "S \<noteq> {}" using mem_zero by auto
 
 lemma scale_minus_left_on: "scale (- a) x = - scale a x" if "x \<in> S"
   by (metis add_cancel_right_right scale_left_distrib_on neg_eq_iff_add_eq_0 that)
+
+lemma mem_uminus: "x \<in> S \<Longrightarrow> -x \<in> S"
+  by (metis mem_scale scale_minus_left_on scale_one_on)
 
 definition subspace :: "'b set \<Rightarrow> bool"
   where subspace_on_def: "subspace T \<longleftrightarrow> 0 \<in> T \<and> (\<forall>x\<in>T. \<forall>y\<in>T. x + y \<in> T) \<and> (\<forall>c. \<forall>x\<in>T. c *s x \<in> T)"
@@ -74,8 +77,13 @@ end
 
 lemma implicit_module_on_with[implicit_ab_group_add]:
   "module_on_with S (+) (-) uminus 0 = module_on S"
-  unfolding module_on_with_def module_on_def implicit_ab_group_add
-  by auto
+proof (intro ext iffI)
+  fix s::"'a\<Rightarrow>'b\<Rightarrow>'b" assume "module_on S s"
+  then interpret module_on S s .
+  show "module_on_with S (+) (-) uminus 0 s"
+    by (auto simp: module_on_with_def implicit_ab_group_add
+        mem_add mem_zero mem_uminus scale_right_distrib_on scale_left_distrib_on mem_scale)
+qed (auto simp: module_on_with_def module_on_def implicit_ab_group_add)
 
 locale module_pair_on = m1: module_on S1 scale1 +
                         m2: module_on S2 scale2
@@ -158,167 +166,8 @@ locale finite_dimensional_vector_space_pair_on =
     and scale2::"'a::field \<Rightarrow> 'c::ab_group_add \<Rightarrow> 'c"
     and Basis1 Basis2
 
-subsection \<open>Tool support\<close>
-
-lemmas subset_iff' = subset_iff[folded Ball_def]
-
-ML \<open>
-structure More_Simplifier =
-struct
-
-fun asm_full_var_simplify ctxt thm =
-  let
-    val ((_, [thm']), ctxt') = Variable.import false [thm] ctxt
-  in
-    Simplifier.asm_full_simplify ctxt' thm'
-    |> singleton (Variable.export ctxt' ctxt)
-    |> Drule.zero_var_indexes
-  end
-
-fun var_simplify_only ctxt ths thm =
-  asm_full_var_simplify (Raw_Simplifier.clear_simpset ctxt addsimps ths) thm
-
-val var_simplified = Attrib.thms >>
-  (fn ths => Thm.rule_attribute ths
-    (fn context => var_simplify_only (Context.proof_of context) ths))
-
-val _ = Theory.setup (Attrib.setup \<^binding>\<open>var_simplified\<close> var_simplified "simplified rule (with vars)")
-
-end
-\<close>
-
-ML \<open>
-val _ = Outer_Syntax.local_theory' \<^command_keyword>\<open>lemmas_with\<close> "note theorems with (the same) attributes"
-    (Parse.attribs --| @{keyword :} -- Parse_Spec.name_facts -- Parse.for_fixes
-     >> (fn (((attrs),facts), fixes) =>
-      #2 oo Specification.theorems_cmd Thm.theoremK
-        (map (apsnd (map (apsnd (fn xs => attrs@xs)))) facts) fixes))
-\<close>
 
 subsection \<open>Local Typedef for Subspace\<close>
-
-lemmas [transfer_rule] = right_total_fun_eq_transfer
-  and [transfer_rule del] = vimage_parametric
-
-locale local_typedef = fixes S ::"'b set" and s::"'s itself"
-  assumes Ex_type_definition_S: "\<exists>(Rep::'s \<Rightarrow> 'b) (Abs::'b \<Rightarrow> 's). type_definition Rep Abs S"
-begin
-
-definition "rep = fst (SOME (Rep::'s \<Rightarrow> 'b, Abs). type_definition Rep Abs S)"
-definition "Abs = snd (SOME (Rep::'s \<Rightarrow> 'b, Abs). type_definition Rep Abs S)"
-
-lemma type_definition_S: "type_definition rep Abs S"
-  unfolding Abs_def rep_def split_beta'
-  by (rule someI_ex) (use Ex_type_definition_S in auto)
-
-lemma rep_in_S[simp]: "rep x \<in> S"
-  and rep_inverse[simp]: "Abs (rep x) = x"
-  and Abs_inverse[simp]: "y \<in> S \<Longrightarrow> rep (Abs y) = y"
-  using type_definition_S
-  unfolding type_definition_def by auto
-
-definition cr_S where "cr_S \<equiv> \<lambda>s b. s = rep b"
-lemmas Domainp_cr_S = type_definition_Domainp[OF type_definition_S cr_S_def, transfer_domain_rule]
-lemmas right_total_cr_S = typedef_right_total[OF type_definition_S cr_S_def, transfer_rule]
-  and bi_unique_cr_S = typedef_bi_unique[OF type_definition_S cr_S_def, transfer_rule]
-  and left_unique_cr_S = typedef_left_unique[OF type_definition_S cr_S_def, transfer_rule]
-  and right_unique_cr_S = typedef_right_unique[OF type_definition_S cr_S_def, transfer_rule]
-
-end
-
-locale local_typedef_ab_group_add = local_typedef S s for S ::"'b::ab_group_add set" and s::"'s itself" +
-  assumes mem_zero_lt: "0 \<in> S"
-  assumes mem_add_lt: "x \<in> S \<Longrightarrow> y \<in> S \<Longrightarrow> x + y \<in> S"
-  assumes mem_uminus_lt: "x \<in> S \<Longrightarrow> -x \<in> S"
-begin
-
-lemma mem_minus_lt: "x \<in> S \<Longrightarrow> y \<in> S \<Longrightarrow> x - y \<in> S"
-  using mem_add_lt[OF _ mem_uminus_lt] by auto
-
-context includes lifting_syntax begin
-
-definition plus_S::"'s \<Rightarrow> 's \<Rightarrow> 's" where "plus_S = (rep ---> rep ---> Abs) plus"
-definition minus_S::"'s \<Rightarrow> 's \<Rightarrow> 's" where "minus_S = (rep ---> rep ---> Abs) minus"
-definition uminus_S::"'s \<Rightarrow> 's" where "uminus_S = (rep ---> Abs) uminus"
-definition zero_S::"'s" where "zero_S = Abs 0"
-
-lemma plus_S_transfer[transfer_rule]: "(cr_S ===> cr_S ===> cr_S) plus plus_S"
-  unfolding plus_S_def
-  by (auto simp: cr_S_def mem_add_lt intro!: rel_funI)
-
-lemma minus_S_transfer[transfer_rule]: "(cr_S ===> cr_S ===> cr_S) minus minus_S"
-  unfolding minus_S_def
-  by (auto simp: cr_S_def mem_minus_lt intro!: rel_funI)
-
-lemma uminus_S_transfer[transfer_rule]: "(cr_S ===> cr_S) uminus uminus_S"
-  unfolding uminus_S_def
-  by (auto simp: cr_S_def mem_uminus_lt intro!: rel_funI)
-
-lemma zero_S_transfer[transfer_rule]: "cr_S 0 zero_S"
-  unfolding zero_S_def
-  by (auto simp: cr_S_def mem_zero_lt intro!: rel_funI)
-
-end
-
-sublocale type: ab_group_add plus_S "zero_S::'s" minus_S uminus_S
-  apply unfold_locales
-  subgoal by transfer simp
-  subgoal by transfer simp
-  subgoal by transfer simp
-  subgoal by transfer simp
-  subgoal by transfer simp
-  done
-
-context includes lifting_syntax begin
-
-lemma sum_transfer[transfer_rule]: "((A===>cr_S) ===> rel_set A ===> cr_S) sum type.sum"
-  if [transfer_rule]: "bi_unique A"
-proof (safe intro!: rel_funI)
-  fix f g S T
-  assume [transfer_rule]: "(A ===> cr_S) f g" and rel_set: "rel_set A S T"
-  show "cr_S (sum f S) (type.sum g T)"
-    using rel_set
-  proof (induction S arbitrary: T rule: infinite_finite_induct)
-    case (infinite S)
-    note [transfer_rule] = infinite.prems
-    from infinite.hyps have "infinite T" by transfer
-    then show ?case by (simp add: infinite.hyps zero_S_transfer)
-  next
-    case [transfer_rule]: empty
-    have "T = {}" by transfer rule
-    then show ?case by (simp add: zero_S_transfer)
-  next
-    case (insert x F)
-    note [transfer_rule] = insert.prems
-    have [simp]: "finite T"
-      by transfer (simp add: insert.hyps)
-    obtain y where [transfer_rule]: "A x y" and y: "y \<in> T"
-      by (meson insert.prems insertI1 rel_setD1)
-    define T' where "T' = T - {y}"
-    have T_def: "T = insert y T'"
-      by (auto simp: T'_def y)
-    define sF where "sF = sum f F"
-    define sT where "sT = type.sum g T'"
-    have [simp]: "y \<notin> T'" "finite T'"
-      by (auto simp: y T'_def)
-    have "rel_set A (insert x F - {x}) T'"
-      unfolding T'_def
-      by transfer_prover
-    then have "rel_set A F T'"
-      using insert.hyps
-      by simp
-    from insert.IH[OF this] have [transfer_rule]: "cr_S sF sT" by (auto simp: sF_def sT_def)
-    have "cr_S (sum f (insert x F)) (type.sum g (insert y T'))"
-      apply (simp add: insert.hyps type.sum.insert_remove sF_def[symmetric] sT_def[symmetric])
-      by transfer_prover
-    then show ?case
-      by (simp add: T_def)
-  qed
-qed
-
-end
-
-end
 
 locale local_typedef_module_on = module_on S scale
   for S and scale::"'a::comm_ring_1\<Rightarrow>'b\<Rightarrow>'b::ab_group_add" and s::"'s itself" +
@@ -332,7 +181,7 @@ lemma mem_sum: "sum f X \<in> S" if "\<And>x. x \<in> X \<Longrightarrow> f x \<
 sublocale local_typedef S "TYPE('s)"
   using Ex_type_definition_S by unfold_locales
 
-sublocale local_typedef_ab_group_add S "TYPE('s)"
+sublocale local_typedef_ab_group_add_on_with "(+)::'b\<Rightarrow>'b\<Rightarrow>'b" "0::'b" "(-)" uminus S "TYPE('s)"
   using mem_zero mem_add mem_scale[of _ "-1"]
   by unfold_locales (auto simp: scale_minus_left_on)
 
@@ -350,8 +199,9 @@ lemma type_module_on_with: "module_on_with UNIV plus_S minus_S uminus_S (zero_S:
 proof -
   have "module_on_with {x. x \<in> S} (+) (-) uminus 0 scale"
     using module_on_axioms
-    by (auto simp: module_on_with_def module_on_def ab_group_add_on_with_def comm_monoid_add_on_with_def
-        ab_semigroup_add_on_with_def semigroup_add_on_with_def)
+    by (auto simp: module_on_with_def module_on_def ab_group_add_on_with_Ball_def
+        comm_monoid_add_on_with_Ball_def mem_uminus
+        ab_semigroup_add_on_with_Ball_def semigroup_add_on_with_def)
   then show ?thesis
     by transfer'
 qed
@@ -535,6 +385,11 @@ end
 
 
 subsection \<open>Transfer from type-based @{theory HOL.Modules} and @{theory HOL.Vector_Spaces}\<close>
+
+lemmas [transfer_rule] = right_total_fun_eq_transfer
+  and [transfer_rule del] = vimage_parametric
+
+subsubsection \<open>Modules\<close>
 
 context module_on begin
 
@@ -789,7 +644,8 @@ and lt_span_eq_dim = vector_space.span_eq_dim
 and lt_dim_le_card' = vector_space.dim_le_card'
 and lt_span_card_ge_dim = vector_space.span_card_ge_dim
 and lt_dim_with = vector_space.dim_with
-(* should work but don't:
+(* should work but don't:v
+
 and lt_bij_if_span_eq_span_bases = vector_space.bij_if_span_eq_span_bases
 *)
 (* not expected to work:
@@ -992,8 +848,6 @@ context includes lifting_syntax
 
 interpretation local_typedef_vector_space_pair S1 scale1 "TYPE('s)" S2 scale2 "TYPE('t)" by unfold_locales fact+
 
-
-
 lemmas_with [var_simplified explicit_ab_group_add,
     unoverload_type 'e 'b,
   OF lt2.type.ab_group_add_axioms lt1.type.ab_group_add_axioms type_vector_space_pair_on_with,
@@ -1053,7 +907,6 @@ and lt_finite_basis_to_basis_subspace_isomorphism = vector_space_pair.finite_bas
   lt_in_span_in_range_construct = vector_space_pair.in_span_in_range_construct
   lt_range_construct_eq_span = vector_space_pair.range_construct_eq_span
 *)
-
 end
 
 lemmas_with [cancel_type_definition, OF m1.S_ne,
