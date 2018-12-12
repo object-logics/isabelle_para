@@ -83,12 +83,12 @@ ML_file "System/bash_syntax.ML";
 ML_file "General/file.ML";
 ML_file "General/long_name.ML";
 ML_file "General/binding.ML";
-ML_file "General/bytes.ML";
 ML_file "General/socket_io.ML";
 ML_file "General/seq.ML";
 ML_file "General/timing.ML";
 ML_file "General/sha1.ML";
 
+ML_file "PIDE/byte_message.ML";
 ML_file "PIDE/yxml.ML";
 ML_file "PIDE/document_id.ML";
 
@@ -318,7 +318,6 @@ ML_file "Isar/isar_cmd.ML";
 subsection "Isabelle/Isar system";
 
 ML_file "System/command_line.ML";
-ML_file "System/system_channel.ML";
 ML_file "System/message_channel.ML";
 ML_file "System/isabelle_process.ML";
 ML_file "System/invoke_scala.ML";

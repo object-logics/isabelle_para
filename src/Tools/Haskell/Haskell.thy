@@ -25,10 +25,13 @@ module Isabelle.Library (
 
   fold, fold_rev, single, map_index, get_index,
 
-  quote, trim_line, clean_name)
+  quote, space_implode, commas, commas_quote, cat_lines,
+  space_explode, split_lines, trim_line, clean_name)
 where
 
 import Data.Maybe
+import qualified Data.List as List
+import qualified Data.List.Split as Split
 
 
 {- functions -}
@@ -91,6 +94,23 @@ get_index f = get_aux 0
 quote :: String -> String
 quote s = "\"" ++ s ++ "\""
 
+space_implode :: String -> [String] -> String
+space_implode = List.intercalate
+
+commas, commas_quote :: [String] -> String
+commas = space_implode ", "
+commas_quote = commas . map quote
+
+cat_lines :: [String] -> String
+cat_lines = space_implode "\n"
+
+
+space_explode :: Char -> String -> [String]
+space_explode c = Split.split (Split.dropDelims (Split.whenElt (== c)))
+
+split_lines :: String -> [String]
+split_lines = space_explode '\n'
+
 trim_line :: String -> String
 trim_line line =
   case reverse line of
@@ -113,7 +133,7 @@ See also \<^file>\<open>$ISABELLE_HOME/src/Pure/General/value.ML\<close>.
 -}
 
 module Isabelle.Value
-  (print_bool, parse_bool, print_int, parse_int, print_real, parse_real)
+  (print_bool, parse_bool, parse_nat, print_int, parse_int, print_real, parse_real)
 where
 
 import Data.Maybe
@@ -131,6 +151,15 @@ parse_bool :: String -> Maybe Bool
 parse_bool "true" = Just True
 parse_bool "false" = Just False
 parse_bool _ = Nothing
+
+
+{- nat -}
+
+parse_nat :: String -> Maybe Int
+parse_nat s =
+  case Read.readMaybe s of
+    Just n | n >= 0 -> Just n
+    _ -> Nothing
 
 
 {- int -}
@@ -1103,7 +1132,7 @@ module Isabelle.Pretty (
   commas, enclose, enum, list, str_list, big_list)
 where
 
-import Isabelle.Library hiding (quote)
+import Isabelle.Library hiding (quote, commas)
 import qualified Data.List as List
 import qualified Isabelle.Buffer as Buffer
 import qualified Isabelle.Markup as Markup
@@ -1368,86 +1397,201 @@ term t =
     \([], a) -> App (pair term term a)]
 \<close>
 
-generate_file "Isabelle/Bytes.hs" = \<open>
-{-  Title:      Isabelle/Bytes.hs
+generate_file "Isabelle/Byte_Message.hs" = \<open>
+{-  Title:      Isabelle/Byte_Message.hs
     Author:     Makarius
     LICENSE:    BSD 3-clause (Isabelle)
 
-Byte-vector messages.
+Byte-oriented messages.
+
+See \<^file>\<open>$ISABELLE_HOME/src/Pure/PIDE/byte_message.ML\<close>
+and \<^file>\<open>$ISABELLE_HOME/src/Pure/PIDE/byte_message.scala\<close>.
 -}
 
-module Isabelle.Bytes (read_line, read_block, read_message, write_message)
+module Isabelle.Byte_Message (
+    write, read, read_block, trim_line, read_line,
+    write_message, read_message,
+    write_line_message, read_line_message
+  )
 where
 
+import Prelude hiding (read)
+import Data.Maybe
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.UTF8 as UTF8
 import Data.Word (Word8)
 
+import Control.Monad (when)
 import Network.Socket (Socket)
 import qualified Network.Socket as Socket
 import qualified Network.Socket.ByteString as ByteString
 
+import Isabelle.Library hiding (trim_line)
 import qualified Isabelle.Value as Value
 
 
--- see also \<^file>\<open>$ISABELLE_HOME/src/Pure/General/bytes.ML\<close>
+{- output operations -}
 
-read_line :: Socket -> IO (Maybe ByteString)
-read_line socket = read []
+write :: Socket -> [ByteString] -> IO ()
+write = ByteString.sendMany
+
+newline :: ByteString
+newline = ByteString.singleton 10
+
+
+{- input operations -}
+
+read :: Socket -> Int -> IO ByteString
+read socket n = read_body 0 []
   where
-    result :: [Word8] -> ByteString
-    result bs =
-      ByteString.pack $ reverse $
-        if not (null bs) && head bs == 13 then tail bs else bs
-
-    read :: [Word8] -> IO (Maybe ByteString)
-    read bs = do
-      s <- ByteString.recv socket 1
-      case ByteString.length s of
-        0 -> return (if null bs then Nothing else Just (result bs))
-        1 ->
-          case ByteString.head s of
-            10 -> return (Just (result bs))
-            b -> read (b : bs)
-
-read_block :: Socket -> Int -> IO ByteString
-read_block socket n = read 0 []
-  where
-    result :: [ByteString] -> ByteString
     result = ByteString.concat . reverse
-
-    read :: Int -> [ByteString] -> IO ByteString
-    read len ss =
+    read_body len ss =
       if len >= n then return (result ss)
       else
         (do
           s <- ByteString.recv socket (min (n - len) 8192)
           case ByteString.length s of
             0 -> return (result ss)
-            m -> read (len + m) (s : ss))
+            m -> read_body (len + m) (s : ss))
+
+read_block :: Socket -> Int -> IO (Maybe ByteString, Int)
+read_block socket n = do
+  msg <- read socket n
+  let len = ByteString.length msg
+  return (if len == n then Just msg else Nothing, len)
+
+trim_line :: ByteString -> ByteString
+trim_line s =
+  if n >= 2 && at (n - 2) == 13 && at (n - 1) == 10 then ByteString.take (n - 2) s
+  else if n >= 1 && (at (n - 1) == 13 || at (n - 1) == 10) then ByteString.take (n - 1) s
+  else s
+  where
+    n = ByteString.length s
+    at = ByteString.index s
+
+read_line :: Socket -> IO (Maybe ByteString)
+read_line socket = read_body []
+  where
+    result = trim_line . ByteString.pack . reverse
+    read_body bs = do
+      s <- ByteString.recv socket 1
+      case ByteString.length s of
+        0 -> return (if null bs then Nothing else Just (result bs))
+        1 ->
+          case ByteString.head s of
+            10 -> return (Just (result bs))
+            b -> read_body (b : bs)
 
 
--- see also \<^file>\<open>$ISABELLE_HOME/src/Pure/Tools/server.scala\<close>
+{- messages with multiple chunks (arbitrary content) -}
 
-read_message :: Socket -> IO (Maybe ByteString)
+make_header :: [Int] -> [ByteString]
+make_header ns =
+  [UTF8.fromString (space_implode "," (map Value.print_int ns)), newline]
+
+write_message :: Socket -> [ByteString] -> IO ()
+write_message socket chunks =
+  write socket (make_header (map ByteString.length chunks) ++ chunks)
+
+parse_header :: ByteString -> [Int]
+parse_header line =
+  let
+    res = map Value.parse_nat (space_explode ',' (UTF8.toString line))
+  in
+    if all isJust res then map fromJust res
+    else error ("Malformed message header: " ++ quote (UTF8.toString line))
+
+read_chunk :: Socket -> Int -> IO ByteString
+read_chunk socket n = do
+  res <- read_block socket n
+  return $
+    case res of
+      (Just chunk, _) -> chunk
+      (Nothing, len) ->
+        error ("Malformed message chunk: unexpected EOF after " ++
+          show len ++ " of " ++ show n ++ " bytes")
+
+read_message :: Socket -> IO (Maybe [ByteString])
 read_message socket = do
+  res <- read_line socket
+  case res of
+    Just line -> Just <$> mapM (read_chunk socket) (parse_header line)
+    Nothing -> return Nothing
+
+
+-- hybrid messages: line or length+block (with content restriction)
+
+is_length :: ByteString -> Bool
+is_length msg =
+  not (ByteString.null msg) && ByteString.all (\b -> 48 <= b && b <= 57) msg
+
+is_terminated :: ByteString -> Bool
+is_terminated msg =
+  not (ByteString.null msg) && (ByteString.last msg == 13 || ByteString.last msg == 10)
+
+write_line_message :: Socket -> ByteString -> IO ()
+write_line_message socket msg = do
+  when (is_length msg || is_terminated msg) $
+    error ("Bad content for line message:\n" ++ take 100 (UTF8.toString msg))
+
+  let n = ByteString.length msg
+  write socket $
+    (if n > 100 || ByteString.any (== 10) msg then make_header [n + 1] else []) ++
+    [msg, newline]
+
+read_line_message :: Socket -> IO (Maybe ByteString)
+read_line_message socket = do
   opt_line <- read_line socket
   case opt_line of
     Nothing -> return Nothing
     Just line ->
-      case Value.parse_int (UTF8.toString line) of
+      case Value.parse_nat (UTF8.toString line) of
         Nothing -> return $ Just line
-        Just n -> Just <$> read_block socket n
+        Just n -> fmap trim_line . fst <$> read_block socket n
+\<close>
 
-write_message :: Socket -> ByteString -> IO ()
-write_message socket msg = do
-  let newline = ByteString.singleton 10
-  let n = ByteString.length msg
-  ByteString.sendMany socket
-    (if n > 100 || ByteString.any (== 10) msg then
-      [UTF8.fromString (Value.print_int (n + 1)), newline, msg, newline]
-     else [msg, newline])
+generate_file "Isabelle/Server.hs" = \<open>
+{-  Title:      Isabelle/Server.hs
+    Author:     Makarius
+    LICENSE:    BSD 3-clause (Isabelle)
+
+TCP server on localhost.
+-}
+
+module Isabelle.Server (server) where
+
+import Control.Monad (forever)
+import qualified Control.Exception as Exception
+import Network.Socket (Socket)
+import qualified Network.Socket as Socket
+import qualified Control.Concurrent as Concurrent
+
+
+localhost :: Socket.HostAddress
+localhost = Socket.tupleToHostAddress (127, 0, 0, 1)
+
+localhost_name :: String
+localhost_name = "127.0.0.1"
+
+server :: (String -> IO ()) -> (Socket -> IO ()) -> IO ()
+server publish handle =
+  Socket.withSocketsDo $ Exception.bracket open Socket.close loop
+  where
+    open :: IO Socket
+    open = do
+      socket <- Socket.socket Socket.AF_INET Socket.Stream Socket.defaultProtocol
+      Socket.bind socket (Socket.SockAddrInet 0 localhost)
+      Socket.listen socket 50
+      port <- Socket.socketPort socket
+      publish (localhost_name ++ ":" ++ show port)
+      return socket
+
+    loop :: Socket -> IO ()
+    loop socket = forever $ do
+      (connection, peer) <- Socket.accept socket
+      Concurrent.forkFinally (handle connection) (\_ -> Socket.close connection)
+      return ()
 \<close>
 
 end
