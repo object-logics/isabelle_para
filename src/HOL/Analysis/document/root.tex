@@ -10,7 +10,7 @@
 \usepackage{pdfsetup}
 
 \urlstyle{rm}
-\isabellestyle{it}
+\isabellestyle{literalunderscore}
 \pagestyle{myheadings}
 
 \begin{document}
@@ -26,9 +26,14 @@
 
 \newpage
 
-\renewcommand{\setisabellecontext}[1]{\markright{THEORY~``#1''}}
+\renewcommand{\setisabellecontext}[1]{\markright{#1.thy}}
 
 \parindent 0pt\parskip 0.5ex
 \input{session}
+
+\pagestyle{headings}
+\bibliographystyle{abbrv}
+\bibliography{root}
+\nocite{dummy}
 
 \end{document}

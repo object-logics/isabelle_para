@@ -2,7 +2,7 @@
     Author:     Amine Chaieb, University of Cambridge
 *)
 
-section \<open>Elementary linear algebra on Euclidean spaces\<close>
+section \<open>Elementary Linear Algebra on Euclidean Spaces\<close>
 
 theory Linear_Algebra
 imports
@@ -76,12 +76,6 @@ lemma norm_triangle_half_l:
   using dist_triangle_half_l[OF assms[unfolded dist_norm[symmetric]]]
   unfolding dist_norm[symmetric] .
 
-lemma norm_triangle_le: "norm x + norm y \<le> e \<Longrightarrow> norm (x + y) \<le> e"
-  by (rule norm_triangle_ineq [THEN order_trans])
-
-lemma norm_triangle_lt: "norm x + norm y < e \<Longrightarrow> norm (x + y) < e"
-  by (rule norm_triangle_ineq [THEN le_less_trans])
-
 lemma abs_triangle_half_r:
   fixes y :: "'a::linordered_field"
   shows "abs (y - x1) < e / 2 \<Longrightarrow> abs (y - x2) < e / 2 \<Longrightarrow> abs (x1 - x2) < e"
@@ -98,19 +92,6 @@ lemma sum_clauses:
   shows "sum f {} = 0"
     and "finite S \<Longrightarrow> sum f (insert x S) = (if x \<in> S then sum f S else f x + sum f S)"
   by (auto simp add: insert_absorb)
-
-lemma sum_norm_bound:
-  fixes f :: "'a \<Rightarrow> 'b::real_normed_vector"
-  assumes K: "\<And>x. x \<in> S \<Longrightarrow> norm (f x) \<le> K"
-  shows "norm (sum f S) \<le> of_nat (card S)*K"
-  using sum_norm_le[OF K] sum_constant[symmetric]
-  by simp
-
-lemma sum_group:
-  assumes fS: "finite S" and fT: "finite T" and fST: "f ` S \<subseteq> T"
-  shows "sum (\<lambda>y. sum g {x. x \<in> S \<and> f x = y}) T = sum g S"
-  unfolding sum_image_gen[OF fS, of g f]
-  by (auto intro: sum.neutral sum.mono_neutral_right[OF fT fST])
 
 lemma vector_eq_ldot: "(\<forall>x. x \<bullet> y = x \<bullet> z) \<longleftrightarrow> y = z"
 proof
@@ -327,51 +308,6 @@ lemma adjoint_adjoint:
   assumes lf: "linear f"
   shows "adjoint (adjoint f) = f"
   by (rule adjoint_unique, simp add: adjoint_clauses [OF lf])
-
-
-subsection%unimportant \<open>Interlude: Some properties of real sets\<close>
-
-lemma seq_mono_lemma:
-  assumes "\<forall>(n::nat) \<ge> m. (d n :: real) < e n"
-    and "\<forall>n \<ge> m. e n \<le> e m"
-  shows "\<forall>n \<ge> m. d n < e m"
-  using assms by force
-
-lemma infinite_enumerate:
-  assumes fS: "infinite S"
-  shows "\<exists>r::nat\<Rightarrow>nat. strict_mono r \<and> (\<forall>n. r n \<in> S)"
-  unfolding strict_mono_def
-  using enumerate_in_set[OF fS] enumerate_mono[of _ _ S] fS by auto
-
-lemma approachable_lt_le: "(\<exists>(d::real) > 0. \<forall>x. f x < d \<longrightarrow> P x) \<longleftrightarrow> (\<exists>d>0. \<forall>x. f x \<le> d \<longrightarrow> P x)"
-  apply auto
-  apply (rule_tac x="d/2" in exI)
-  apply auto
-  done
-
-lemma approachable_lt_le2:  \<comment> \<open>like the above, but pushes aside an extra formula\<close>
-    "(\<exists>(d::real) > 0. \<forall>x. Q x \<longrightarrow> f x < d \<longrightarrow> P x) \<longleftrightarrow> (\<exists>d>0. \<forall>x. f x \<le> d \<longrightarrow> Q x \<longrightarrow> P x)"
-  apply auto
-  apply (rule_tac x="d/2" in exI, auto)
-  done
-
-lemma triangle_lemma:
-  fixes x y z :: real
-  assumes x: "0 \<le> x"
-    and y: "0 \<le> y"
-    and z: "0 \<le> z"
-    and xy: "x\<^sup>2 \<le> y\<^sup>2 + z\<^sup>2"
-  shows "x \<le> y + z"
-proof -
-  have "y\<^sup>2 + z\<^sup>2 \<le> y\<^sup>2 + 2 * y * z + z\<^sup>2"
-    using z y by simp
-  with xy have th: "x\<^sup>2 \<le> (y + z)\<^sup>2"
-    by (simp add: power2_eq_square field_simps)
-  from y z have yz: "y + z \<ge> 0"
-    by arith
-  from power2_le_imp_le[OF th yz] show ?thesis .
-qed
-
 
 
 subsection \<open>Archimedean properties and useful consequences\<close>

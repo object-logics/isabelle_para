@@ -6,7 +6,7 @@
    Author:     Johannes Hoelzl, TU Muenchen
 *)
 
-section \<open>Convex sets, functions and related things\<close>
+section \<open>Convex Sets and Functions\<close>
 
 theory Convex_Euclidean_Space
 imports
@@ -1343,7 +1343,9 @@ lemma affine_hyperplane: "affine {x. a \<bullet> x = b}"
   by (simp add: affine_def algebra_simps) (metis distrib_right mult.left_neutral)
 
 
-subsubsection%unimportant \<open>Some explicit formulations (from Lars Schewe)\<close>
+subsubsection%unimportant \<open>Some explicit formulations\<close>
+
+text "Formalized by Lars Schewe."
 
 lemma affine:
   fixes V::"'a::real_vector set"
@@ -2070,7 +2072,9 @@ next
 qed
 
 
-subsection \<open>Affine dependence and consequential theorems (from Lars Schewe)\<close>
+subsection \<open>Affine dependence and consequential theorems\<close>
+
+text "Formalized by Lars Schewe."
 
 definition%important affine_dependent :: "'a::real_vector set \<Rightarrow> bool"
   where "affine_dependent s \<longleftrightarrow> (\<exists>x\<in>s. x \<in> affine hull (s - {x}))"
@@ -2082,11 +2086,11 @@ apply (blast dest: hull_mono [OF Diff_mono [OF _ subset_refl]])
 done
 
 lemma affine_independent_subset:
-  shows "\<lbrakk>~ affine_dependent t; s \<subseteq> t\<rbrakk> \<Longrightarrow> ~ affine_dependent s"
+  shows "\<lbrakk>\<not> affine_dependent t; s \<subseteq> t\<rbrakk> \<Longrightarrow> \<not> affine_dependent s"
 by (metis affine_dependent_subset)
 
 lemma affine_independent_Diff:
-   "~ affine_dependent s \<Longrightarrow> ~ affine_dependent(s - t)"
+   "\<not> affine_dependent s \<Longrightarrow> \<not> affine_dependent(s - t)"
 by (meson Diff_subset affine_dependent_subset)
 
 proposition affine_dependent_explicit:
@@ -2601,7 +2605,9 @@ next
 qed (use assms in \<open>auto simp: convex_explicit\<close>)
 
 
-subsubsection%unimportant \<open>Another formulation from Lars Schewe\<close>
+subsubsection%unimportant \<open>Another formulation\<close>
+
+text "Formalized by Lars Schewe."
 
 lemma convex_hull_explicit:
   fixes p :: "'a::real_vector set"
@@ -2631,9 +2637,9 @@ proof -
     }
     moreover
     have "(\<Sum>v\<in>y ` {1..k}. sum u {i \<in> {1..k}. y i = v}) = 1"
-      unfolding sum_image_gen[OF fin, symmetric] using obt(2) by auto
+      unfolding sum.image_gen[OF fin, symmetric] using obt(2) by auto
     moreover have "(\<Sum>v\<in>y ` {1..k}. sum u {i \<in> {1..k}. y i = v} *\<^sub>R v) = x"
-      using sum_image_gen[OF fin, of "\<lambda>i. u i *\<^sub>R y i" y, symmetric]
+      using sum.image_gen[OF fin, of "\<lambda>i. u i *\<^sub>R y i" y, symmetric]
       unfolding scaleR_left.sum using obt(3) by auto
     ultimately
     have "\<exists>S u. finite S \<and> S \<subseteq> p \<and> (\<forall>x\<in>S. 0 \<le> u x) \<and> sum u S = 1 \<and> (\<Sum>v\<in>S. u v *\<^sub>R v) = x"
@@ -2677,8 +2683,8 @@ proof -
         by (auto simp: sum_constant_scaleR)
     }
     then have "(\<Sum>x = 1..card S. u (f x)) = 1" "(\<Sum>i = 1..card S. u (f i) *\<^sub>R f i) = y"
-      unfolding sum_image_gen[OF *(1), of "\<lambda>x. u (f x) *\<^sub>R f x" f]
-        and sum_image_gen[OF *(1), of "\<lambda>x. u (f x)" f]
+      unfolding sum.image_gen[OF *(1), of "\<lambda>x. u (f x) *\<^sub>R f x" f]
+        and sum.image_gen[OF *(1), of "\<lambda>x. u (f x)" f]
       unfolding f
       using sum.cong [of S S "\<lambda>y. (\<Sum>x\<in>{x \<in> {1..card S}. f x = y}. u (f x) *\<^sub>R f x)" "\<lambda>v. u v *\<^sub>R v"]
       using sum.cong [of S S "\<lambda>y. (\<Sum>x\<in>{x \<in> {1..card S}. f x = y}. u (f x))" u]
@@ -3427,7 +3433,7 @@ lemma aff_dim_affine_independent:
 
 lemma affine_independent_iff_card:
     fixes s :: "'a::euclidean_space set"
-    shows "~ affine_dependent s \<longleftrightarrow> finite s \<and> aff_dim s = int(card s) - 1"
+    shows "\<not> affine_dependent s \<longleftrightarrow> finite s \<and> aff_dim s = int(card s) - 1"
   apply (rule iffI)
   apply (simp add: aff_dim_affine_independent aff_independent_finite)
   by (metis affine_basis_exists [of s] aff_dim_unique card_subset_eq diff_add_cancel of_nat_eq_iff)
@@ -3652,7 +3658,7 @@ qed
 
 lemma affine_independent_card_dim_diffs:
   fixes S :: "'a :: euclidean_space set"
-  assumes "~ affine_dependent S" "a \<in> S"
+  assumes "\<not> affine_dependent S" "a \<in> S"
     shows "card S = dim {x - a|x. x \<in> S} + 1"
 proof -
   have 1: "{b - a|b. b \<in> (S - {a})} \<subseteq> {x - a|x. x \<in> S}" by auto
@@ -3766,7 +3772,7 @@ next
   show ?thesis
   proof safe
     assume 0: "aff_dim S = 0"
-    have "~ {a,b} \<subseteq> S" if "b \<noteq> a" for b
+    have "\<not> {a,b} \<subseteq> S" if "b \<noteq> a" for b
       by (metis "0" aff_dim_2 aff_dim_subset not_one_le_zero that)
     then show "\<exists>a. S = {a}"
       using \<open>a \<in> S\<close> by blast
@@ -3798,7 +3804,7 @@ qed
 
 lemma disjoint_affine_hull:
   fixes s :: "'n::euclidean_space set"
-  assumes "~ affine_dependent s" "t \<subseteq> s" "u \<subseteq> s" "t \<inter> u = {}"
+  assumes "\<not> affine_dependent s" "t \<subseteq> s" "u \<subseteq> s" "t \<inter> u = {}"
     shows "(affine hull t) \<inter> (affine hull u) = {}"
 proof -
   have "finite s" using assms by (simp add: aff_independent_finite)
@@ -3813,7 +3819,7 @@ proof -
     have [simp]: "s \<inter> t = t" "s \<inter> - t \<inter> u = u" using assms by auto
     have "sum c s = 0"
       by (simp add: c_def comm_monoid_add_class.sum.If_cases \<open>finite s\<close> sum_negf)
-    moreover have "~ (\<forall>v\<in>s. c v = 0)"
+    moreover have "\<not> (\<forall>v\<in>s. c v = 0)"
       by (metis (no_types) IntD1 \<open>s \<inter> t = t\<close> a1 c_def sum_not_0 zero_neq_one)
     moreover have "(\<Sum>v\<in>s. c v *\<^sub>R v) = 0"
       by (simp add: c_def if_smult sum_negf
@@ -5747,7 +5753,9 @@ proof -
 qed auto
 
 
-subsection \<open>Radon's theorem (from Lars Schewe)\<close>
+subsection \<open>Radon's theorem\<close>
+
+text "Formalized by Lars Schewe."
 
 lemma radon_ex_lemma:
   assumes "finite c" "affine_dependent c"

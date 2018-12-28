@@ -2,10 +2,10 @@
     Authors:    LC Paulson and Robert Himmelmann (TU Muenchen), based on material from HOL Light
 *)
 
-section \<open>Continuous paths and path-connected sets\<close>
+section \<open>Continuous Paths\<close>
 
 theory Path_Connected
-imports Continuous_Extension Continuum_Not_Denumerable
+  imports Continuous_Extension Continuum_Not_Denumerable
 begin
 
 subsection \<open>Paths and Arcs\<close>
@@ -131,6 +131,7 @@ lemma arc_linear_image_eq:
      shows  "arc(f \<circ> g) = arc g"
   using assms inj_on_eq_iff [of f]
   by (auto simp: arc_def inj_on_def path_linear_image_eq)
+
 
 subsection%unimportant\<open>Basic lemmas about paths\<close>
 
@@ -292,6 +293,7 @@ next
     apply (auto simp: field_simps pathfinish_def pathstart_def intro!: 1 2)
     done
 qed
+
 
 section%unimportant \<open>Path Images\<close>
 
@@ -591,7 +593,7 @@ proof (rule ccontr)
     using \<open>d1 > 0\<close> \<open>d2 > 0\<close> by (simp add: min_def)
   have dist2: "dist (1 / 2 + min (1 / 2) (min d1 d2) / 4) (1 / 2) < d2"
     using \<open>d1 > 0\<close> \<open>d2 > 0\<close> by (simp add: min_def dist_norm)
-  have [simp]: "~ min (1 / 2) (min d1 d2) \<le> 0"
+  have [simp]: "\<not> min (1 / 2) (min d1 d2) \<le> 0"
     using \<open>d1 > 0\<close> \<open>d2 > 0\<close> by (simp add: min_def)
   have "dist (g2 (min (1 / 2) (min d1 d2) / 2)) (g1 1) < e/2"
        "dist (g2 (min (1 / 2) (min d1 d2) / 2)) (g2 0) < e/2"
@@ -670,7 +672,7 @@ proof
   have False if "g1 0 = g2 u" "0 \<le> u" "u \<le> 1" for u
     using * [of 0 "(u + 1) / 2"] that assms arc_distinct_ends [OF \<open>?lhs\<close>]
     by (auto simp: joinpaths_def pathstart_def pathfinish_def split_ifs divide_simps)
-  then have n1: "~ (pathstart g1 \<in> path_image g2)"
+  then have n1: "pathstart g1 \<notin> path_image g2"
     unfolding pathstart_def path_image_def
     using atLeastAtMost_iff by blast
   show ?rhs using \<open>?lhs\<close>
@@ -757,7 +759,7 @@ lemma path_image_sym:
 by (simp add: path_image_join sup_commute)
 
 
-section\<open>Choosing a subpath of an existing path\<close>
+subsection\<open>Subpath\<close>
 
 definition%important subpath :: "real \<Rightarrow> real \<Rightarrow> (real \<Rightarrow> 'a) \<Rightarrow> real \<Rightarrow> 'a::real_normed_vector"
   where "subpath a b g \<equiv> \<lambda>x. g((b - a) * x + a)"
@@ -937,6 +939,7 @@ lemma path_image_subpath_subset:
 lemma join_subpaths_middle: "subpath (0) ((1 / 2)) p +++ subpath ((1 / 2)) 1 p = p"
   by (rule ext) (simp add: joinpaths_def subpath_def divide_simps)
 
+
 subsection%unimportant\<open>There is a subpath to the frontier\<close>
 
 lemma subpath_to_frontier_explicit:
@@ -1053,7 +1056,8 @@ proof -
     done
 qed
 
-subsection \<open>shiftpath: Reparametrizing a closed curve to start at some chosen point\<close>
+
+subsection \<open>Shift Path to Start at Some Given Point\<close>
 
 definition%important shiftpath :: "real \<Rightarrow> (real \<Rightarrow> 'a::topological_space) \<Rightarrow> real \<Rightarrow> 'a"
   where "shiftpath a f = (\<lambda>x. if (a + x) \<le> 1 then f (a + x) else f (a + x - 1))"
@@ -1164,7 +1168,8 @@ proof (intro conjI impI ballI)
     by (force split: if_split_asm dest!: *)
 qed
 
-subsection \<open>Special case of straight-line paths\<close>
+
+subsection \<open>Straight-Line Paths\<close>
 
 definition%important linepath :: "'a::real_normed_vector \<Rightarrow> 'a \<Rightarrow> real \<Rightarrow> 'a"
   where "linepath a b = (\<lambda>x. (1 - x) *\<^sub>R a + x *\<^sub>R b)"
@@ -1385,6 +1390,7 @@ next
     by (force simp: inj_on_def)
 qed
 
+
 subsection%unimportant \<open>Bounding a point away from a path\<close>
 
 lemma not_on_path_ball:
@@ -1415,16 +1421,17 @@ proof -
     by (rule_tac x="e/2" in exI) auto
 qed
 
+section "Path-Connectedness" (* TODO: separate theory? *)
 
-section \<open>Path component, considered as a "joinability" relation\<close>
+subsection \<open>Path component\<close>
 
-text \<open>(by Tom Hales)\<close>
+text \<open>Original formalization by Tom Hales\<close>
 
 definition%important "path_component s x y \<longleftrightarrow>
   (\<exists>g. path g \<and> path_image g \<subseteq> s \<and> pathstart g = x \<and> pathfinish g = y)"
 
 abbreviation%important
-   "path_component_set s x \<equiv> Collect (path_component s x)"
+  "path_component_set s x \<equiv> Collect (path_component s x)"
 
 lemmas path_defs = path_def pathstart_def pathfinish_def path_image_def path_component_def
 
@@ -1472,7 +1479,6 @@ lemma path_connected_linepath:
   unfolding path_component_def
   by (rule_tac x="linepath a b" in exI, auto)
 
-
 subsubsection%unimportant \<open>Path components as sets\<close>
 
 lemma path_component_set:
@@ -1494,6 +1500,7 @@ lemma path_component_mono:
 lemma path_component_eq:
    "y \<in> path_component_set s x \<Longrightarrow> path_component_set s y = path_component_set s x"
 by (metis (no_types, lifting) Collect_cong mem_Collect_eq path_component_sym path_component_trans)
+
 
 subsection \<open>Path connectedness of a space\<close>
 
@@ -1803,6 +1810,7 @@ next
   case False then show ?thesis
     using path_component_eq_empty by auto
 qed
+
 
 subsection%unimportant\<open>Lemmas about path-connectedness\<close>
 
@@ -2442,7 +2450,7 @@ subsection%unimportant\<open>Existence of unbounded components\<close>
 lemma cobounded_unbounded_component:
     fixes s :: "'a :: euclidean_space set"
     assumes "bounded (-s)"
-      shows "\<exists>x. x \<in> s \<and> ~ bounded (connected_component_set s x)"
+      shows "\<exists>x. x \<in> s \<and> \<not> bounded (connected_component_set s x)"
 proof -
   obtain i::'a where i: "i \<in> Basis"
     using nonempty_Basis by blast
@@ -2450,7 +2458,7 @@ proof -
     using bounded_subset_ballD [OF assms, of 0] by auto
   then have *: "\<And>x. B \<le> norm x \<Longrightarrow> x \<in> s"
     by (force simp: ball_def dist_norm)
-  have unbounded_inner: "~ bounded {x. inner i x \<ge> B}"
+  have unbounded_inner: "\<not> bounded {x. inner i x \<ge> B}"
     apply (auto simp: bounded_def dist_norm)
     apply (rule_tac x="x + (max B e + 1 + \<bar>i \<bullet> x\<bar>) *\<^sub>R i" in exI)
     apply simp
@@ -2475,8 +2483,8 @@ qed
 lemma cobounded_unique_unbounded_component:
     fixes s :: "'a :: euclidean_space set"
     assumes bs: "bounded (-s)" and "2 \<le> DIM('a)"
-        and bo: "~ bounded(connected_component_set s x)"
-                "~ bounded(connected_component_set s y)"
+        and bo: "\<not> bounded(connected_component_set s x)"
+                "\<not> bounded(connected_component_set s y)"
       shows "connected_component_set s x = connected_component_set s y"
 proof -
   obtain i::'a where i: "i \<in> Basis"
@@ -2507,7 +2515,7 @@ qed
 
 lemma cobounded_unbounded_components:
     fixes s :: "'a :: euclidean_space set"
-    shows "bounded (-s) \<Longrightarrow> \<exists>c. c \<in> components s \<and> ~bounded c"
+    shows "bounded (-s) \<Longrightarrow> \<exists>c. c \<in> components s \<and> \<not>bounded c"
   by (metis cobounded_unbounded_component components_def imageI)
 
 lemma cobounded_unique_unbounded_components:
@@ -2523,7 +2531,7 @@ lemma cobounded_has_bounded_component:
   by (meson cobounded_unique_unbounded_components connected_eq_connected_components_eq assms)
 
 
-section\<open>The "inside" and "outside" of a set\<close>
+section\<open>The \<open>inside\<close> and \<open>outside\<close> of a Set\<close>
 
 text%important\<open>The inside comprises the points in a bounded connected component of the set's complement.
   The outside comprises the points in unbounded connected component of the complement.\<close>
@@ -2532,9 +2540,9 @@ definition%important inside where
   "inside S \<equiv> {x. (x \<notin> S) \<and> bounded(connected_component_set ( - S) x)}"
 
 definition%important outside where
-  "outside S \<equiv> -S \<inter> {x. ~ bounded(connected_component_set (- S) x)}"
+  "outside S \<equiv> -S \<inter> {x. \<not> bounded(connected_component_set (- S) x)}"
 
-lemma outside: "outside S = {x. ~ bounded(connected_component_set (- S) x)}"
+lemma outside: "outside S = {x. \<not> bounded(connected_component_set (- S) x)}"
   by (auto simp: outside_def) (metis Compl_iff bounded_empty connected_component_eq_empty)
 
 lemma inside_no_overlap [simp]: "inside S \<inter> S = {}"
@@ -2619,7 +2627,7 @@ qed
 
 lemma unbounded_outside:
     fixes S :: "'a::{real_normed_vector, perfect_space} set"
-    shows "bounded S \<Longrightarrow> ~ bounded(outside S)"
+    shows "bounded S \<Longrightarrow> \<not> bounded(outside S)"
   using cobounded_imp_unbounded cobounded_outside by blast
 
 lemma bounded_inside:
@@ -2655,7 +2663,7 @@ by (meson gt_ex leD le_less_linear less_imp_le order.trans)
 lemma not_outside_connected_component_lt:
     fixes S :: "'a::euclidean_space set"
     assumes S: "bounded S" and "2 \<le> DIM('a)"
-      shows "- (outside S) = {x. \<forall>B. \<exists>y. B < norm(y) \<and> ~ (connected_component (- S) x y)}"
+      shows "- (outside S) = {x. \<forall>B. \<exists>y. B < norm(y) \<and> \<not> connected_component (- S) x y}"
 proof -
   obtain B::real where B: "0 < B" and Bno: "\<And>x. x \<in> S \<Longrightarrow> norm x \<le> B"
     using S [simplified bounded_pos] by auto
@@ -2681,24 +2689,24 @@ qed
 lemma not_outside_connected_component_le:
     fixes S :: "'a::euclidean_space set"
     assumes S: "bounded S"  "2 \<le> DIM('a)"
-      shows "- (outside S) = {x. \<forall>B. \<exists>y. B \<le> norm(y) \<and> ~ (connected_component (- S) x y)}"
+      shows "- (outside S) = {x. \<forall>B. \<exists>y. B \<le> norm(y) \<and> \<not> connected_component (- S) x y}"
 apply (auto intro: less_imp_le simp: not_outside_connected_component_lt [OF assms])
 by (meson gt_ex less_le_trans)
 
 lemma inside_connected_component_lt:
     fixes S :: "'a::euclidean_space set"
     assumes S: "bounded S"  "2 \<le> DIM('a)"
-      shows "inside S = {x. (x \<notin> S) \<and> (\<forall>B. \<exists>y. B < norm(y) \<and> ~(connected_component (- S) x y))}"
+      shows "inside S = {x. (x \<notin> S) \<and> (\<forall>B. \<exists>y. B < norm(y) \<and> \<not> connected_component (- S) x y)}"
   by (auto simp: inside_outside not_outside_connected_component_lt [OF assms])
 
 lemma inside_connected_component_le:
     fixes S :: "'a::euclidean_space set"
     assumes S: "bounded S"  "2 \<le> DIM('a)"
-      shows "inside S = {x. (x \<notin> S) \<and> (\<forall>B. \<exists>y. B \<le> norm(y) \<and> ~(connected_component (- S) x y))}"
+      shows "inside S = {x. (x \<notin> S) \<and> (\<forall>B. \<exists>y. B \<le> norm(y) \<and> \<not> connected_component (- S) x y)}"
   by (auto simp: inside_outside not_outside_connected_component_le [OF assms])
 
 lemma inside_subset:
-  assumes "connected U" and "~bounded U" and "T \<union> U = - S"
+  assumes "connected U" and "\<not> bounded U" and "T \<union> U = - S"
   shows "inside S \<subseteq> T"
 apply (auto simp: inside_def)
 by (metis bounded_subset [of "connected_component_set (- S) _"] connected_component_maximal
@@ -2794,7 +2802,7 @@ lemma frontier_of_components_closed_complement:
 lemma frontier_minimal_separating_closed:
   fixes S :: "'a::real_normed_vector set"
   assumes "closed S"
-      and nconn: "~ connected(- S)"
+      and nconn: "\<not> connected(- S)"
       and C: "C \<in> components (- S)"
       and conn: "\<And>T. \<lbrakk>closed T; T \<subset> S\<rbrakk> \<Longrightarrow> connected(- T)"
     shows "frontier C = S"
@@ -3319,10 +3327,11 @@ lemma outside_in_components:
 
 lemma bounded_unique_outside:
     fixes s :: "'a :: euclidean_space set"
-    shows "\<lbrakk>bounded s; DIM('a) \<ge> 2\<rbrakk> \<Longrightarrow> (c \<in> components (- s) \<and> ~bounded c \<longleftrightarrow> c = outside s)"
+    shows "\<lbrakk>bounded s; DIM('a) \<ge> 2\<rbrakk> \<Longrightarrow> (c \<in> components (- s) \<and> \<not> bounded c \<longleftrightarrow> c = outside s)"
   apply (rule iffI)
   apply (metis cobounded_unique_unbounded_components connected_outside double_compl outside_bounded_nonempty outside_in_components unbounded_outside)
   by (simp add: connected_outside outside_bounded_nonempty outside_in_components unbounded_outside)
+
 
 subsection\<open>Condition for an open map's image to contain a ball\<close>
 
@@ -3365,7 +3374,7 @@ next
       apply (rule le_no)
       using w wy oint
       by (force simp: imageI image_mono interiorI interior_subset frontier_def y)
-    have **: "(~(b \<inter> (- S) = {}) \<and> ~(b - (- S) = {}) \<Longrightarrow> (b \<inter> f \<noteq> {}))
+    have **: "(b \<inter> (- S) \<noteq> {} \<and> b - (- S) \<noteq> {} \<Longrightarrow> b \<inter> f \<noteq> {})
               \<Longrightarrow> (b \<inter> S \<noteq> {}) \<Longrightarrow> b \<inter> f = {} \<Longrightarrow>
               b \<subseteq> S" for b f and S :: "'b set"
       by blast
@@ -3377,10 +3386,9 @@ next
       by (metis dw_le norm_minus_commute not_less order_trans rle wy)
 qed
 
-section\<open> Homotopy of maps p,q : X=>Y with property P of all intermediate maps\<close>
 
-text%important\<open> We often just want to require that it fixes some subset, but to take in
-  the case of a loop homotopy, it's convenient to have a general property P.\<close>
+section \<open>Homotopy of Maps\<close> (* TODO separate theory? *)
+
 
 definition%important homotopic_with ::
   "[('a::topological_space \<Rightarrow> 'b::topological_space) \<Rightarrow> bool, 'a set, 'b set, 'a \<Rightarrow> 'b, 'a \<Rightarrow> 'b] \<Rightarrow> bool"
@@ -3394,7 +3402,11 @@ where
        (\<forall>t \<in> {0..1}. P(\<lambda>x. h(t, x))))"
 
 
-text\<open> We often want to just localize the ending function equality or whatever.\<close>
+text\<open>$p, q$ are functions $X \to Y$, and the property $P$ restricts all intermediate maps.
+We often just want to require that $P$ fixes some subset, but to include the case of a loop homotopy,
+it is convenient to have a general property $P$.\<close>
+
+text \<open>We often want to just localize the ending function equality or whatever.\<close>
 proposition homotopic_with:
   fixes X :: "'a::topological_space set" and Y :: "'b::topological_space set"
   assumes "\<And>h k. (\<And>x. x \<in> X \<Longrightarrow> h x = k x) \<Longrightarrow> (P h \<longleftrightarrow> P k)"
@@ -3888,6 +3900,7 @@ proposition homotopic_paths_continuous_image:
   apply (auto simp: pathstart_def pathfinish_def elim!: homotopic_with_mono)
   done
 
+
 subsection\<open>Group properties for homotopy of paths\<close>
 
 text%important\<open>So taking equivalence classes under homotopy would give the fundamental group\<close>
@@ -4277,6 +4290,7 @@ proof -
     apply (auto simp: intro!: homotopic_loops_nearby_explicit assms  \<open>e > 0\<close>)
     by (metis atLeastAtMost_iff imageI le_less_trans not_le path_image_def)
 qed
+
 
 subsection\<open> Homotopy and subpaths\<close>
 
@@ -4834,6 +4848,7 @@ proof -
     done
 qed
 
+
 subsection\<open>Local versions of topological properties in general\<close>
 
 definition%important locally :: "('a::topological_space set \<Rightarrow> bool) \<Rightarrow> 'a set \<Rightarrow> bool"
@@ -5065,7 +5080,8 @@ proof (clarsimp simp add: locally_def)
     done
 qed
 
-subsection\<open>Sort of induction principle for connected sets\<close>
+
+subsection\<open>An induction principle for connected sets\<close>
 
 proposition connected_induction:
   assumes "connected S"
@@ -5084,7 +5100,7 @@ proof -
     done
   have 2: "openin (subtopology euclidean S)
              {b. \<exists>T. openin (subtopology euclidean S) T \<and>
-                     b \<in> T \<and> (\<forall>x\<in>T. P x \<longrightarrow> ~ Q x)}"
+                     b \<in> T \<and> (\<forall>x\<in>T. P x \<longrightarrow> \<not> Q x)}"
     apply (subst openin_subopen, clarify)
     apply (rule_tac x=T in exI, auto)
     done
@@ -5511,6 +5527,7 @@ next
     by (metis open_openin openin_topspace subtopology_superset top.extremum topspace_euclidean_subtopology)
 qed
 
+
 subsection\<open>Sura-Bura's results about compact components of sets\<close>
 
 proposition Sura_Bura_compact:
@@ -5742,7 +5759,7 @@ proof
 qed blast
 
 
-subsection\<open>Important special cases of local connectedness and path connectedness\<close>
+subsection\<open>Special cases of local connectedness and path connectedness\<close>
 
 lemma locally_connected_1:
   assumes
@@ -6541,6 +6558,7 @@ next
   finally show ?thesis .
 qed
 
+
 subsection\<open>Retracts, in a general sense, preserve (co)homotopic triviality)\<close>
 
 locale%important Retracts =
@@ -6706,6 +6724,7 @@ lemma homeomorphic_simply_connected:
 lemma homeomorphic_simply_connected_eq:
     "S homeomorphic T \<Longrightarrow> (simply_connected S \<longleftrightarrow> simply_connected T)"
   by (metis homeomorphic_simply_connected homeomorphic_sym)
+
 
 subsection\<open>Homotopy equivalence\<close>
 
@@ -6997,6 +7016,7 @@ lemma homeomorphic_contractible:
   shows "\<lbrakk>contractible S; S homeomorphic T\<rbrakk> \<Longrightarrow> contractible T"
   by (metis homeomorphic_contractible_eq)
 
+
 subsection%unimportant\<open>Misc other results\<close>
 
 lemma bounded_connected_Compl_real:
@@ -7040,6 +7060,7 @@ proof -
   then show ?thesis
     by blast
 qed
+
 
 subsection%unimportant\<open>Some Uncountable Sets\<close>
 
@@ -7155,7 +7176,7 @@ qed
 
 lemma connected_card_eq_iff_nontrivial:
   fixes S :: "'a::metric_space set"
-  shows "connected S \<Longrightarrow> uncountable S \<longleftrightarrow> ~(\<exists>a. S \<subseteq> {a})"
+  shows "connected S \<Longrightarrow> uncountable S \<longleftrightarrow> \<not>(\<exists>a. S \<subseteq> {a})"
   apply (auto simp: countable_finite finite_subset)
   by (metis connected_uncountable is_singletonI' is_singleton_the_elem subset_singleton_iff)
 
@@ -7184,7 +7205,7 @@ subsection%unimportant\<open> Some simple positive connection theorems\<close>
 
 proposition path_connected_convex_diff_countable:
   fixes U :: "'a::euclidean_space set"
-  assumes "convex U" "~ collinear U" "countable S"
+  assumes "convex U" "\<not> collinear U" "countable S"
     shows "path_connected(U - S)"
 proof (clarsimp simp add: path_connected_def)
   fix a b
@@ -7202,7 +7223,7 @@ proof (clarsimp simp add: path_connected_def)
     have "?m \<in> U"
       using \<open>a \<in> U\<close> \<open>b \<in> U\<close> \<open>convex U\<close> convex_contains_segment by force
     obtain c where "c \<in> U" and nc_abc: "\<not> collinear {a,b,c}"
-      by (metis False \<open>a \<in> U\<close> \<open>b \<in> U\<close> \<open>~ collinear U\<close> collinear_triples insert_absorb)
+      by (metis False \<open>a \<in> U\<close> \<open>b \<in> U\<close> \<open>\<not> collinear U\<close> collinear_triples insert_absorb)
     have ncoll_mca: "\<not> collinear {?m,c,a}"
       by (metis (full_types) \<open>a \<noteq> ?m\<close> collinear_3_trans collinear_midpoint insert_commute nc_abc)
     have ncoll_mcb: "\<not> collinear {?m,c,b}"
@@ -7289,7 +7310,7 @@ qed
 
 corollary connected_convex_diff_countable:
   fixes U :: "'a::euclidean_space set"
-  assumes "convex U" "~ collinear U" "countable S"
+  assumes "convex U" "\<not> collinear U" "countable S"
   shows "connected(U - S)"
   by (simp add: assms path_connected_convex_diff_countable path_connected_imp_connected)
 
@@ -7344,7 +7365,7 @@ qed
 proposition path_connected_openin_diff_countable:
   fixes S :: "'a::euclidean_space set"
   assumes "connected S" and ope: "openin (subtopology euclidean (affine hull S)) S"
-      and "~ collinear S" "countable T"
+      and "\<not> collinear S" "countable T"
     shows "path_connected(S - T)"
 proof (clarsimp simp add: path_connected_component)
   fix x y
@@ -7360,8 +7381,8 @@ proof (clarsimp simp add: path_connected_component)
         by (auto simp: openin_contains_ball)
       with \<open>x \<in> U\<close> have x: "x \<in> ball x r \<inter> affine hull S"
         by auto
-      have "~ S \<subseteq> {x}"
-        using \<open>~ collinear S\<close>  collinear_subset by blast
+      have "\<not> S \<subseteq> {x}"
+        using \<open>\<not> collinear S\<close>  collinear_subset by blast
       then obtain x' where "x' \<noteq> x" "x' \<in> S"
         by blast
       obtain y where y: "y \<noteq> x" "y \<in> ball x r \<inter> affine hull S"
@@ -7403,7 +7424,7 @@ proof (clarsimp simp add: path_connected_component)
         show "x \<in> ball x r \<inter> affine hull S"
           using \<open>x \<in> S\<close> \<open>r > 0\<close> by (simp add: hull_inc)
         have "openin (subtopology euclidean (affine hull S)) (ball x r \<inter> affine hull S)"
-          by (simp add: inf.commute openin_Int_open)
+          by (subst inf.commute) (simp add: openin_Int_open)
         then show "openin (subtopology euclidean S) (ball x r \<inter> affine hull S)"
           by (rule openin_subset_trans [OF _ subS Ssub])
       qed (use * path_component_trans in \<open>auto simp: path_connected_component path_component_of_subset [OF ST]\<close>)
@@ -7414,7 +7435,7 @@ qed
 corollary connected_openin_diff_countable:
   fixes S :: "'a::euclidean_space set"
   assumes "connected S" and ope: "openin (subtopology euclidean (affine hull S)) S"
-      and "~ collinear S" "countable T"
+      and "\<not> collinear S" "countable T"
     shows "connected(S - T)"
   by (metis path_connected_imp_connected path_connected_openin_diff_countable [OF assms])
 
@@ -7445,7 +7466,7 @@ by (simp add: assms path_connected_imp_connected path_connected_open_diff_counta
 
 
 
-subsection\<open>Self-homeomorphisms shuffling points about in various ways\<close>
+subsection%unimportant \<open>Self-homeomorphisms shuffling points about\<close>
 
 subsubsection%unimportant\<open>The theorem \<open>homeomorphism_moving_points_exists\<close>\<close>
 
@@ -7577,7 +7598,7 @@ proof -
     done
 qed
 
-corollary homeomorphism_moving_point_2:
+corollary%unimportant homeomorphism_moving_point_2:
   fixes a :: "'a::euclidean_space"
   assumes "affine T" "a \<in> T" and u: "u \<in> ball a r \<inter> T" and v: "v \<in> ball a r \<inter> T"
   obtains f g where "homeomorphism (cball a r \<inter> T) (cball a r \<inter> T) f g"
@@ -7605,12 +7626,12 @@ proof -
 qed
 
 
-corollary homeomorphism_moving_point_3:
+corollary%unimportant homeomorphism_moving_point_3:
   fixes a :: "'a::euclidean_space"
   assumes "affine T" "a \<in> T" and ST: "ball a r \<inter> T \<subseteq> S" "S \<subseteq> T"
       and u: "u \<in> ball a r \<inter> T" and v: "v \<in> ball a r \<inter> T"
   obtains f g where "homeomorphism S S f g"
-                    "f u = v" "{x. ~ (f x = x \<and> g x = x)} \<subseteq> ball a r \<inter> T"
+                    "f u = v" "{x. \<not> (f x = x \<and> g x = x)} \<subseteq> ball a r \<inter> T"
 proof -
   obtain f g where hom: "homeomorphism (cball a r \<inter> T) (cball a r \<inter> T) f g"
                and "f u = v" and fid: "\<And>x. \<lbrakk>x \<in> sphere a r; x \<in> T\<rbrakk> \<Longrightarrow> f x = x"
@@ -7683,21 +7704,21 @@ proof -
 qed
 
 
-proposition homeomorphism_moving_point:
+proposition%unimportant homeomorphism_moving_point:
   fixes a :: "'a::euclidean_space"
   assumes ope: "openin (subtopology euclidean (affine hull S)) S"
       and "S \<subseteq> T"
       and TS: "T \<subseteq> affine hull S"
       and S: "connected S" "a \<in> S" "b \<in> S"
   obtains f g where "homeomorphism T T f g" "f a = b"
-                    "{x. ~ (f x = x \<and> g x = x)} \<subseteq> S"
-                    "bounded {x. ~ (f x = x \<and> g x = x)}"
+                    "{x. \<not> (f x = x \<and> g x = x)} \<subseteq> S"
+                    "bounded {x. \<not> (f x = x \<and> g x = x)}"
 proof -
   have 1: "\<exists>h k. homeomorphism T T h k \<and> h (f d) = d \<and>
-              {x. ~ (h x = x \<and> k x = x)} \<subseteq> S \<and> bounded {x. ~ (h x = x \<and> k x = x)}"
+              {x. \<not> (h x = x \<and> k x = x)} \<subseteq> S \<and> bounded {x. \<not> (h x = x \<and> k x = x)}"
         if "d \<in> S" "f d \<in> S" and homfg: "homeomorphism T T f g"
-        and S: "{x. ~ (f x = x \<and> g x = x)} \<subseteq> S"
-        and bo: "bounded {x. ~ (f x = x \<and> g x = x)}" for d f g
+        and S: "{x. \<not> (f x = x \<and> g x = x)} \<subseteq> S"
+        and bo: "bounded {x. \<not> (f x = x \<and> g x = x)}" for d f g
   proof (intro exI conjI)
     show homgf: "homeomorphism T T g f"
       by (metis homeomorphism_symD homfg)
@@ -7722,7 +7743,7 @@ proof -
       by force
     show "{x. \<not> ((f2 \<circ> f1) x = x \<and> (g1 \<circ> g2) x = x)} \<subseteq> S"
       using sub by force
-    have "bounded ({x. ~(f1 x = x \<and> g1 x = x)} \<union> {x. ~(f2 x = x \<and> g2 x = x)})"
+    have "bounded ({x. \<not>(f1 x = x \<and> g1 x = x)} \<union> {x. \<not>(f2 x = x \<and> g2 x = x)})"
       using bo by simp
     then show "bounded {x. \<not> ((f2 \<circ> f1) x = x \<and> (g1 \<circ> g2) x = x)}"
       by (rule bounded_subset) auto
@@ -7753,7 +7774,7 @@ proof -
       done
   qed
   have "\<exists>f g. homeomorphism T T f g \<and> f a = b \<and>
-              {x. ~ (f x = x \<and> g x = x)} \<subseteq> S \<and> bounded {x. ~ (f x = x \<and> g x = x)}"
+              {x. \<not> (f x = x \<and> g x = x)} \<subseteq> S \<and> bounded {x. \<not> (f x = x \<and> g x = x)}"
     apply (rule connected_equivalence_relation [OF S], safe)
       apply (blast intro: 1 2 3)+
     done
@@ -7769,7 +7790,7 @@ lemma homeomorphism_moving_points_exists_gen:
       and ope: "openin (subtopology euclidean (affine hull S)) S"
       and "S \<subseteq> T" "T \<subseteq> affine hull S" "connected S"
   shows "\<exists>f g. homeomorphism T T f g \<and> (\<forall>i \<in> K. f(x i) = y i) \<and>
-               {x. ~ (f x = x \<and> g x = x)} \<subseteq> S \<and> bounded {x. ~ (f x = x \<and> g x = x)}"
+               {x. \<not> (f x = x \<and> g x = x)} \<subseteq> S \<and> bounded {x. \<not> (f x = x \<and> g x = x)}"
   using assms
 proof (induction K)
   case empty
@@ -7783,11 +7804,11 @@ next
        and xyS: "\<And>i. i \<in> K \<Longrightarrow> x i \<in> S \<and> y i \<in> S"
     by (simp_all add: pairwise_insert)
   obtain f g where homfg: "homeomorphism T T f g" and feq: "\<And>i. i \<in> K \<Longrightarrow> f(x i) = y i"
-               and fg_sub: "{x. ~ (f x = x \<and> g x = x)} \<subseteq> S"
-               and bo_fg: "bounded {x. ~ (f x = x \<and> g x = x)}"
+               and fg_sub: "{x. \<not> (f x = x \<and> g x = x)} \<subseteq> S"
+               and bo_fg: "bounded {x. \<not> (f x = x \<and> g x = x)}"
     using insert.IH [OF xyS pw] insert.prems by (blast intro: that)
   then have "\<exists>f g. homeomorphism T T f g \<and> (\<forall>i \<in> K. f(x i) = y i) \<and>
-                   {x. ~ (f x = x \<and> g x = x)} \<subseteq> S \<and> bounded {x. ~ (f x = x \<and> g x = x)}"
+                   {x. \<not> (f x = x \<and> g x = x)} \<subseteq> S \<and> bounded {x. \<not> (f x = x \<and> g x = x)}"
     using insert by blast
   have aff_eq: "affine hull (S - y ` K) = affine hull S"
     apply (rule affine_hull_Diff)
@@ -7832,21 +7853,21 @@ next
       using feq hk_sub by (auto simp: heq)
     show "{x. \<not> ((h \<circ> f) x = x \<and> (g \<circ> k) x = x)} \<subseteq> S"
       using fg_sub hk_sub by force
-    have "bounded ({x. ~(f x = x \<and> g x = x)} \<union> {x. ~(h x = x \<and> k x = x)})"
+    have "bounded ({x. \<not>(f x = x \<and> g x = x)} \<union> {x. \<not>(h x = x \<and> k x = x)})"
       using bo_fg bo_hk bounded_Un by blast
     then show "bounded {x. \<not> ((h \<circ> f) x = x \<and> (g \<circ> k) x = x)}"
       by (rule bounded_subset) auto
   qed
 qed
 
-proposition homeomorphism_moving_points_exists:
+proposition%unimportant homeomorphism_moving_points_exists:
   fixes S :: "'a::euclidean_space set"
   assumes 2: "2 \<le> DIM('a)" "open S" "connected S" "S \<subseteq> T" "finite K"
       and KS: "\<And>i. i \<in> K \<Longrightarrow> x i \<in> S \<and> y i \<in> S"
       and pw: "pairwise (\<lambda>i j. (x i \<noteq> x j) \<and> (y i \<noteq> y j)) K"
       and S: "S \<subseteq> T" "T \<subseteq> affine hull S" "connected S"
   obtains f g where "homeomorphism T T f g" "\<And>i. i \<in> K \<Longrightarrow> f(x i) = y i"
-                    "{x. ~ (f x = x \<and> g x = x)} \<subseteq> S" "bounded {x. (~ (f x = x \<and> g x = x))}"
+                    "{x. \<not> (f x = x \<and> g x = x)} \<subseteq> S" "bounded {x. (\<not> (f x = x \<and> g x = x))}"
 proof (cases "S = {}")
   case True
   then show ?thesis
@@ -7867,7 +7888,6 @@ next
   then show ?thesis
     using homeomorphism_moving_points_exists_gen [OF \<open>finite K\<close> KS pw _ ope S] that by fastforce
 qed
-
 
 subsubsection%unimportant\<open>The theorem \<open>homeomorphism_grouping_points_exists\<close>\<close>
 
@@ -7995,8 +8015,8 @@ lemma homeomorphism_grouping_point_4:
   fixes T :: "real set"
   assumes "open U" "open S" "connected S" "U \<noteq> {}" "finite K" "K \<subseteq> S" "U \<subseteq> S" "S \<subseteq> T"
   obtains f g where "homeomorphism T T f g"
-                    "\<And>x. x \<in> K \<Longrightarrow> f x \<in> U" "{x. (~ (f x = x \<and> g x = x))} \<subseteq> S"
-                    "bounded {x. (~ (f x = x \<and> g x = x))}"
+                    "\<And>x. x \<in> K \<Longrightarrow> f x \<in> U" "{x. (\<not> (f x = x \<and> g x = x))} \<subseteq> S"
+                    "bounded {x. (\<not> (f x = x \<and> g x = x))}"
 proof -
   obtain c d where "box c d \<noteq> {}" "cbox c d \<subseteq> U"
   proof -
@@ -8106,11 +8126,11 @@ proof -
   qed
 qed
 
-proposition homeomorphism_grouping_points_exists:
+proposition%unimportant homeomorphism_grouping_points_exists:
   fixes S :: "'a::euclidean_space set"
   assumes "open U" "open S" "connected S" "U \<noteq> {}" "finite K" "K \<subseteq> S" "U \<subseteq> S" "S \<subseteq> T"
-  obtains f g where "homeomorphism T T f g" "{x. (~ (f x = x \<and> g x = x))} \<subseteq> S"
-                    "bounded {x. (~ (f x = x \<and> g x = x))}" "\<And>x. x \<in> K \<Longrightarrow> f x \<in> U"
+  obtains f g where "homeomorphism T T f g" "{x. (\<not> (f x = x \<and> g x = x))} \<subseteq> S"
+                    "bounded {x. (\<not> (f x = x \<and> g x = x))}" "\<And>x. x \<in> K \<Longrightarrow> f x \<in> U"
 proof (cases "2 \<le> DIM('a)")
   case True
   have TS: "T \<subseteq> affine hull S"
@@ -8172,10 +8192,10 @@ next
       using sub hj
       apply (drule_tac c="h x" in subsetD, force)
       by (metis imageE)
-    have "bounded (j ` {x. (~ (f x = x \<and> g x = x))})"
+    have "bounded (j ` {x. (\<not> (f x = x \<and> g x = x))})"
       by (rule bounded_linear_image [OF bou]) (use \<open>linear j\<close> linear_conv_bounded_linear in auto)
     moreover
-    have *: "{x. ~((j \<circ> f \<circ> h) x = x \<and> (j \<circ> g \<circ> h) x = x)} = j ` {x. (~ (f x = x \<and> g x = x))}"
+    have *: "{x. \<not>((j \<circ> f \<circ> h) x = x \<and> (j \<circ> g \<circ> h) x = x)} = j ` {x. (\<not> (f x = x \<and> g x = x))}"
       using hj by (auto simp: jf jg image_iff, metis+)
     ultimately show "bounded {x. \<not> ((j \<circ> f \<circ> h) x = x \<and> (j \<circ> g \<circ> h) x = x)}"
       by metis
@@ -8185,13 +8205,13 @@ next
 qed
 
 
-proposition homeomorphism_grouping_points_exists_gen:
+proposition%unimportant homeomorphism_grouping_points_exists_gen:
   fixes S :: "'a::euclidean_space set"
   assumes opeU: "openin (subtopology euclidean S) U"
       and opeS: "openin (subtopology euclidean (affine hull S)) S"
       and "U \<noteq> {}" "finite K" "K \<subseteq> S" and S: "S \<subseteq> T" "T \<subseteq> affine hull S" "connected S"
-  obtains f g where "homeomorphism T T f g" "{x. (~ (f x = x \<and> g x = x))} \<subseteq> S"
-                    "bounded {x. (~ (f x = x \<and> g x = x))}" "\<And>x. x \<in> K \<Longrightarrow> f x \<in> U"
+  obtains f g where "homeomorphism T T f g" "{x. (\<not> (f x = x \<and> g x = x))} \<subseteq> S"
+                    "bounded {x. (\<not> (f x = x \<and> g x = x))}" "\<And>x. x \<in> K \<Longrightarrow> f x \<in> U"
 proof (cases "2 \<le> aff_dim S")
   case True
   have opeU': "openin (subtopology euclidean (affine hull S)) U"
@@ -8208,7 +8228,7 @@ proof (cases "2 \<le> aff_dim S")
   then obtain \<gamma> where \<gamma>: "bij_betw \<gamma> K P"
     using \<open>finite K\<close> finite_same_card_bij by blast
   have "\<exists>f g. homeomorphism T T f g \<and> (\<forall>i \<in> K. f(id i) = \<gamma> i) \<and>
-               {x. ~ (f x = x \<and> g x = x)} \<subseteq> S \<and> bounded {x. ~ (f x = x \<and> g x = x)}"
+               {x. \<not> (f x = x \<and> g x = x)} \<subseteq> S \<and> bounded {x. \<not> (f x = x \<and> g x = x)}"
   proof (rule homeomorphism_moving_points_exists_gen [OF \<open>finite K\<close> _ _ True opeS S])
     show "\<And>i. i \<in> K \<Longrightarrow> id i \<in> S \<and> \<gamma> i \<in> S"
       by (metis id_apply opeU openin_contains_cball subsetCE \<open>P \<subseteq> U\<close> \<open>bij_betw \<gamma> K P\<close> \<open>K \<subseteq> S\<close> bij_betwE)
@@ -8314,10 +8334,10 @@ next
     next
       have "compact (j ` closure {x. \<not> (f x = x \<and> g x = x)})"
         using bou by (auto simp: compact_continuous_image cont_hj)
-      then have "bounded (j ` {x. (~ (f x = x \<and> g x = x))})"
+      then have "bounded (j ` {x. \<not> (f x = x \<and> g x = x)})"
         by (rule bounded_closure_image [OF compact_imp_bounded])
       moreover
-      have *: "{x \<in> affine hull S. j (f (h x)) \<noteq> x \<or> j (g (h x)) \<noteq> x} = j ` {x. (~ (f x = x \<and> g x = x))}"
+      have *: "{x \<in> affine hull S. j (f (h x)) \<noteq> x \<or> j (g (h x)) \<noteq> x} = j ` {x. (\<not> (f x = x \<and> g x = x))}"
         using h j by (auto simp: image_iff; metis)
       ultimately have "bounded {x \<in> affine hull S. j (f (h x)) \<noteq> x \<or> j (g (h x)) \<noteq> x}"
         by metis
@@ -8337,7 +8357,8 @@ next
   qed
 qed
 
-subsection\<open>nullhomotopic mappings\<close>
+
+subsection\<open>Nullhomotopic mappings\<close>
 
 text\<open> A mapping out of a sphere is nullhomotopic iff it extends to the ball.
 This even works out in the degenerate cases when the radius is \<open>\<le>\<close> 0, and

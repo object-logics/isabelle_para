@@ -1,4 +1,4 @@
-section \<open>Conformal Mappings and Consequences of Cauchy's integral theorem\<close>
+section \<open>Conformal Mappings and Consequences of Cauchy's Integral Theorem\<close>
 
 text\<open>By John Harrison et al.  Ported from HOL Light by L C Paulson (2016)\<close>
 
@@ -359,7 +359,7 @@ theorem open_mapping_thm:
   assumes holf: "f holomorphic_on S"
       and S: "open S" and "connected S"
       and "open U" and "U \<subseteq> S"
-      and fne: "~ f constant_on S"
+      and fne: "\<not> f constant_on S"
     shows "open (f ` U)"
 proof -
   have *: "open (f ` U)"
@@ -468,7 +468,7 @@ corollary%unimportant open_mapping_thm2:
   assumes holf: "f holomorphic_on S"
       and S: "open S"
       and "open U" "U \<subseteq> S"
-      and fnc: "\<And>X. \<lbrakk>open X; X \<subseteq> S; X \<noteq> {}\<rbrakk> \<Longrightarrow> ~ f constant_on X"
+      and fnc: "\<And>X. \<lbrakk>open X; X \<subseteq> S; X \<noteq> {}\<rbrakk> \<Longrightarrow> \<not> f constant_on X"
     shows "open (f ` U)"
 proof -
   have "S = \<Union>(components S)" by simp
@@ -518,7 +518,7 @@ proof (rule ccontr)
   assume "\<not> f constant_on S"
   then have "open (f ` U)"
     using open_mapping_thm assms by blast
-  moreover have "~ open (f ` U)"
+  moreover have "\<not> open (f ` U)"
   proof -
     have "\<exists>t. cmod (f \<xi> - t) < e \<and> t \<notin> f ` U" if "0 < e" for e
       apply (rule_tac x="if 0 < Re(f \<xi>) then f \<xi> + (e/2) else f \<xi> - (e/2)" in exI)
@@ -735,7 +735,7 @@ by (rule LeastI Least_le; rule P)+
 lemma holomorphic_factor_zero_nonconstant:
   assumes holf: "f holomorphic_on S" and S: "open S" "connected S"
       and "\<xi> \<in> S" "f \<xi> = 0"
-      and nonconst: "~ f constant_on S"
+      and nonconst: "\<not> f constant_on S"
    obtains g r n
       where "0 < n"  "0 < r"  "ball \<xi> r \<subseteq> S"
             "g holomorphic_on ball \<xi> r"
@@ -1156,7 +1156,7 @@ proof -
   obtain r where "r > 0" "ball \<xi> r \<subseteq> S" "inj_on f (ball \<xi> r)"
     by (blast intro: that has_complex_derivative_locally_injective [OF assms])
   then have \<xi>: "\<xi> \<in> ball \<xi> r" by simp
-  then have nc: "~ f constant_on ball \<xi> r"
+  then have nc: "\<not> f constant_on ball \<xi> r"
     using \<open>inj_on f (ball \<xi> r)\<close> injective_not_constant by fastforce
   have holf': "f holomorphic_on ball \<xi> r"
     using \<open>ball \<xi> r \<subseteq> S\<close> holf holomorphic_on_subset by blast
@@ -2132,7 +2132,7 @@ proof -
       case False
       then have "t > 0"
         using 2 by (force simp: zero_less_mult_iff)
-      have "~ ball a t \<subseteq> s \<Longrightarrow> ball a t \<inter> frontier s \<noteq> {}"
+      have "\<not> ball a t \<subseteq> s \<Longrightarrow> ball a t \<inter> frontier s \<noteq> {}"
         apply (rule connected_Int_frontier [of "ball a t" s], simp_all)
         using \<open>0 < t\<close> \<open>a \<in> s\<close> centre_in_ball apply blast
         done
@@ -3260,7 +3260,7 @@ proof -
       moreover have "isolated_singularity_at h z"
         unfolding isolated_singularity_at_def h_def
         apply (rule exI[where x=e])
-        using e_holo e_nz \<open>e>0\<close> by (metis Topology_Euclidean_Space.open_ball analytic_on_open 
+        using e_holo e_nz \<open>e>0\<close> by (metis open_ball analytic_on_open 
             holomorphic_on_inverse open_delete)
       ultimately show ?thesis
         using P_exist[of h] by auto
@@ -3482,7 +3482,7 @@ proof -
 
     have [intro]: "fp \<midarrow>z\<rightarrow>fp z" "gp \<midarrow>z\<rightarrow>gp z"
         using fr(1) \<open>fr>0\<close> gr(1) \<open>gr>0\<close>
-        by (meson Topology_Euclidean_Space.open_ball ball_subset_cball centre_in_ball 
+        by (meson open_ball ball_subset_cball centre_in_ball 
             continuous_on_eq_continuous_at continuous_within holomorphic_on_imp_continuous_on 
             holomorphic_on_subset)+
     have ?thesis when "fn+gn>0" 
@@ -3958,7 +3958,7 @@ proof -
       apply (elim Lim_transform_within_open[where s="ball z r"])
       using r by auto
     moreover have "g \<midarrow>z\<rightarrow>g z"
-      by (metis (mono_tags, lifting) Topology_Euclidean_Space.open_ball at_within_open_subset 
+      by (metis (mono_tags, lifting) open_ball at_within_open_subset 
           ball_subset_cball centre_in_ball continuous_on holomorphic_on_imp_continuous_on r(1,3) subsetCE)
     ultimately have "(\<lambda>w. (g w * (w - z) powr of_int n) / g w) \<midarrow>z\<rightarrow> f z/g z"
       apply (rule_tac tendsto_divide)
@@ -4088,7 +4088,7 @@ proof -
     assume " \<not> n < 0"
     define c where "c=(if n=0 then g z else 0)"
     have [simp]:"g \<midarrow>z\<rightarrow> g z" 
-      by (metis Topology_Euclidean_Space.open_ball at_within_open ball_subset_cball centre_in_ball 
+      by (metis open_ball at_within_open ball_subset_cball centre_in_ball 
             continuous_on holomorphic_on_imp_continuous_on holomorphic_on_subset r(1) r(3) )
     have "\<forall>\<^sub>F x in at z. f x = g x * (x - z) ^ nat n"
       unfolding eventually_at_topological
@@ -4154,7 +4154,7 @@ proof -
       then show "LIM w at z. w - z :> at 0" 
         unfolding filterlim_at by (auto intro:tendsto_eq_intros)
       show "isolated_singularity_at g z" 
-        by (meson Diff_subset Topology_Euclidean_Space.open_ball analytic_on_holomorphic 
+        by (meson Diff_subset open_ball analytic_on_holomorphic 
             assms(1,2,3) holomorphic_on_subset isolated_singularity_at_def openE)
     qed
     then show "not_essential f z"
@@ -4590,7 +4590,7 @@ proof -
     assume "\<not> (\<exists>\<^sub>F w in at z. g w \<noteq> 0)"
     then have "\<forall>\<^sub>F w in nhds z. g w = 0"
       unfolding eventually_at eventually_nhds frequently_at using \<open>g z = 0\<close> 
-      by (metis Topology_Euclidean_Space.open_ball UNIV_I centre_in_ball dist_commute mem_ball)
+      by (metis open_ball UNIV_I centre_in_ball dist_commute mem_ball)
     then have "deriv g z = deriv (\<lambda>_. 0) z"
       by (intro deriv_cong_ev) auto
     then have "deriv g z = 0" by auto

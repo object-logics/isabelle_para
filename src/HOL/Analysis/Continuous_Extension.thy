@@ -2,7 +2,7 @@
     Authors:    LC Paulson, based on material from HOL Light
 *)
 
-section \<open>Continuous extensions of functions: Urysohn's lemma, Dugundji extension theorem, Tietze\<close>
+section \<open>Continuous Extensions of Functions\<close>
 
 theory Continuous_Extension
 imports Starlike
@@ -112,7 +112,9 @@ next
 qed
 
 
-subsection\<open>Urysohn's lemma (for Euclidean spaces, where the proof is easy using distances)\<close>
+subsection\<open>Urysohn's Lemma for Euclidean Spaces\<close>
+
+text \<open>For Euclidean spaces the proof is easy using distances.\<close>
 
 lemma Urysohn_both_ne:
   assumes US: "closedin (subtopology euclidean U) S"
@@ -130,7 +132,7 @@ proof -
     using \<open>T \<noteq> {}\<close>  UT setdist_eq_0_closedin  by auto
   have sdpos: "0 < setdist {x} S + setdist {x} T" if "x \<in> U" for x
   proof -
-    have "~ (setdist {x} S = 0 \<and> setdist {x} T = 0)"
+    have "\<not> (setdist {x} S = 0 \<and> setdist {x} T = 0)"
       using assms by (metis IntI empty_iff setdist_eq_0_closedin that)
     then show ?thesis
       by (metis add.left_neutral add.right_neutral add_pos_pos linorder_neqE_linordered_idom not_le setdist_pos_le)
@@ -295,10 +297,9 @@ proposition Urysohn:
   using assms by (auto intro: Urysohn_local [of UNIV S T a b])
 
 
-subsection\<open>The Dugundji extension theorem and Tietze variants as corollaries\<close>
+subsection\<open>Dugundji's Extension Theorem and Tietze Variants\<close>
 
-text%important\<open>J. Dugundji. An extension of Tietze's theorem. Pacific J. Math. Volume 1, Number 3 (1951), 353-367.
-https://projecteuclid.org/euclid.pjm/1103052106\<close>
+text \<open>See \cite{dugundji}.\<close>
 
 theorem Dugundji:
   fixes f :: "'a::euclidean_space \<Rightarrow> 'b::real_inner"
@@ -486,7 +487,7 @@ corollary Tietze:
   using assms
 by (auto simp: image_subset_iff intro: Dugundji [of "cball 0 B" U S f])
 
-corollary Tietze_closed_interval:
+corollary%unimportant Tietze_closed_interval:
   fixes f :: "'a::euclidean_space \<Rightarrow> 'b::euclidean_space"
   assumes "continuous_on S f"
       and "closedin (subtopology euclidean U) S"
@@ -497,7 +498,7 @@ corollary Tietze_closed_interval:
 apply (rule Dugundji [of "cbox a b" U S f])
 using assms by auto
 
-corollary Tietze_closed_interval_1:
+corollary%unimportant Tietze_closed_interval_1:
   fixes f :: "'a::euclidean_space \<Rightarrow> real"
   assumes "continuous_on S f"
       and "closedin (subtopology euclidean U) S"
@@ -508,7 +509,7 @@ corollary Tietze_closed_interval_1:
 apply (rule Dugundji [of "cbox a b" U S f])
 using assms by (auto simp: image_subset_iff)
 
-corollary Tietze_open_interval:
+corollary%unimportant Tietze_open_interval:
   fixes f :: "'a::euclidean_space \<Rightarrow> 'b::euclidean_space"
   assumes "continuous_on S f"
       and "closedin (subtopology euclidean U) S"
@@ -519,7 +520,7 @@ corollary Tietze_open_interval:
 apply (rule Dugundji [of "box a b" U S f])
 using assms by auto
 
-corollary Tietze_open_interval_1:
+corollary%unimportant Tietze_open_interval_1:
   fixes f :: "'a::euclidean_space \<Rightarrow> real"
   assumes "continuous_on S f"
       and "closedin (subtopology euclidean U) S"
@@ -530,7 +531,7 @@ corollary Tietze_open_interval_1:
 apply (rule Dugundji [of "box a b" U S f])
 using assms by (auto simp: image_subset_iff)
 
-corollary Tietze_unbounded:
+corollary%unimportant Tietze_unbounded:
   fixes f :: "'a::euclidean_space \<Rightarrow> 'b::real_inner"
   assumes "continuous_on S f"
       and "closedin (subtopology euclidean U) S"
