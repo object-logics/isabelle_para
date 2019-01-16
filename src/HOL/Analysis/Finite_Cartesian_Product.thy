@@ -626,7 +626,7 @@ lemma%unimportant norm_bound_component_lt_cart: "norm x < e ==> \<bar>x$i\<bar> 
 lemma%unimportant norm_le_l1_cart: "norm x \<le> sum(\<lambda>i. \<bar>x$i\<bar>) UNIV"
   by (simp add: norm_vec_def L2_set_le_sum)
 
-lemma%unimportant bounded_linear_vec_nth: "bounded_linear (\<lambda>x. x $ i)"
+lemma%unimportant bounded_linear_vec_nth[intro]: "bounded_linear (\<lambda>x. x $ i)"
 apply standard
 apply (rule vector_add_component)
 apply (rule vector_scaleR_component)
@@ -1081,6 +1081,14 @@ lemma%unimportant matrix_vector_mul_lid [simp]: "mat 1 *v x = (x::'a::semiring_1
 lemma%unimportant matrix_transpose_mul:
     "transpose(A ** B) = transpose B ** transpose (A::'a::comm_semiring_1^_^_)"
   by (simp add: matrix_matrix_mult_def transpose_def vec_eq_iff mult.commute)
+
+lemma%unimportant matrix_mult_transpose_dot_column:
+  shows "transpose A ** A = (\<chi> i j. inner (column i A) (column j A))"
+  by (simp add: matrix_matrix_mult_def vec_eq_iff transpose_def column_def inner_vec_def)
+
+lemma%unimportant matrix_mult_transpose_dot_row:
+  shows "A ** transpose A = (\<chi> i j. inner (row i A) (row j A))"
+  by (simp add: matrix_matrix_mult_def vec_eq_iff transpose_def row_def inner_vec_def)
 
 lemma%unimportant matrix_eq:
   fixes A B :: "'a::semiring_1 ^ 'n ^ 'm"
