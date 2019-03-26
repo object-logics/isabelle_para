@@ -72,29 +72,31 @@ object RDF
   def long(x: Long): XML.Body = string(Value.Long(x))
   def double(x: Double): XML.Body = string(Value.Double(x))
   def seconds(x: Time): XML.Body = double(x.seconds)
-  def date_time_stamp(x: Date): XML.Body = string(Date.Format("uuuu-MM-dd'T'HH:mm:ss.SSSxxx")(x))
+
+  val date_format: Date.Format = Date.Format("uuuu-MM-dd'T'HH:mm:ss.SSSxxx")
+  def date_time_stamp(x: Date): XML.Body = string(date_format(x))
 
 
   /* predicates */
 
   object Property  // binary relation with plain value
   {
-    val title: String = dcterms("title")
-    val creator: String = dcterms("creator")
-    val contributor: String = dcterms("contributor")
-    val date: String = dcterms("date")
-    val description: String = dcterms("description")
-    val license: String = dcterms("license")
+    def title: String = dcterms("title")
+    def creator: String = dcterms("creator")
+    def contributor: String = dcterms("contributor")
+    def date: String = dcterms("date")
+    def license: String = dcterms("license")
+    def description: String = dcterms("description")
   }
 
-  private val meta_data_table =
+  private lazy val meta_data_table =
     Map(
       Markup.META_TITLE -> Property.title,
       Markup.META_CREATOR -> Property.creator,
       Markup.META_CONTRIBUTOR -> Property.contributor,
       Markup.META_DATE -> Property.date,
-      Markup.META_DESCRIPTION -> Property.description,
-      Markup.META_LICENSE -> Property.license)
+      Markup.META_LICENSE -> Property.license,
+      Markup.META_DESCRIPTION -> Property.description)
 
   def meta_data(props: Properties.T): Properties.T =
     props.flatMap({ case (a, b) => meta_data_table.get(a).map((_, b)) })
