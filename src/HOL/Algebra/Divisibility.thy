@@ -398,12 +398,12 @@ lemma (in monoid) division_weak_partial_order [simp, intro!]:
 
 subsubsection \<open>Multiplication and associativity\<close>
 
-lemma (in monoid_cancel) mult_cong_r:
+lemma (in monoid) mult_cong_r:
   assumes "b \<sim> b'" "a \<in> carrier G"  "b \<in> carrier G"  "b' \<in> carrier G"
   shows "a \<otimes> b \<sim> a \<otimes> b'"
   by (meson assms associated_def divides_mult_lI)
 
-lemma (in comm_monoid_cancel) mult_cong_l:
+lemma (in comm_monoid) mult_cong_l:
   assumes "a \<sim> a'" "a \<in> carrier G"  "a' \<in> carrier G"  "b \<in> carrier G"
   shows "a \<otimes> b \<sim> a' \<otimes> b"
   using assms m_comm mult_cong_r by auto
@@ -723,6 +723,11 @@ proof (elim irreducibleE)
   qed
 qed
 
+lemma divides_irreducible_condition:
+  assumes "irreducible G r" and "a \<in> carrier G"
+  shows "a divides\<^bsub>G\<^esub> r \<Longrightarrow> a \<in> Units G \<or> a \<sim>\<^bsub>G\<^esub> r"
+  using assms unfolding irreducible_def properfactor_def associated_def
+  by (cases "r divides\<^bsub>G\<^esub> a", auto)
 
 subsubsection \<open>Prime elements\<close>
 
@@ -773,6 +778,36 @@ next
     by (metis A(1) l_cancel m_closed m_lcomm one_closed r_one c)
   thus "b \<in> Units G"
     using A(1) Units_one_closed b'(1) unit_factor by presburger
+qed
+
+lemma (in comm_monoid_cancel) prime_pow_divides_iff:
+  assumes "p \<in> carrier G" "a \<in> carrier G" "b \<in> carrier G" and "prime G p" and "\<not> (p divides a)"
+  shows "(p [^] (n :: nat)) divides (a \<otimes> b) \<longleftrightarrow> (p [^] n) divides b"
+proof
+  assume "(p [^] n) divides b" thus "(p [^] n) divides (a \<otimes> b)"
+    using divides_prod_l[of "p [^] n" b a] assms by simp  
+next
+  assume "(p [^] n) divides (a \<otimes> b)" thus "(p [^] n) divides b"
+  proof (induction n)
+    case 0 with \<open>b \<in> carrier G\<close> show ?case
+      by (simp add: unit_divides)
+  next
+    case (Suc n)
+    hence "(p [^] n) divides (a \<otimes> b)" and "(p [^] n) divides b"
+      using assms(1) divides_prod_r by auto
+    with \<open>(p [^] (Suc n)) divides (a \<otimes> b)\<close> obtain c d
+      where c: "c \<in> carrier G" and "b = (p [^] n) \<otimes> c"
+        and d: "d \<in> carrier G" and "a \<otimes> b = (p [^] (Suc n)) \<otimes> d"
+      using assms by blast
+    hence "(p [^] n) \<otimes> (a \<otimes> c) = (p [^] n) \<otimes> (p \<otimes> d)"
+      using assms by (simp add: m_assoc m_lcomm)
+    hence "a \<otimes> c = p \<otimes> d"
+      using c d assms(1) assms(2) l_cancel by blast
+    with \<open>\<not> (p divides a)\<close> and \<open>prime G p\<close> have "p divides c"
+      by (metis assms(2) c d dividesI' prime_divides)
+    with \<open>b = (p [^] n) \<otimes> c\<close> show ?case
+      using assms(1) c by simp
+  qed
 qed
 
 
