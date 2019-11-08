@@ -1,7 +1,9 @@
 /*  Title:      Pure/Tools/phabricator.scala
     Author:     Makarius
 
-Support for Phabricator server. See also:
+Support for Phabricator server, notably for Ubuntu 18.04 LTS.
+
+See also:
   - https://www.phacility.com/phabricator
   - https://secure.phabricator.com/book/phabricator
 */
@@ -30,6 +32,8 @@ object Phabricator
 
   /* global system resources */
 
+  val www_user = "www-data"
+
   val daemon_user = "phabricator"
 
   val ssh_standard = 22
@@ -47,12 +51,12 @@ object Phabricator
   def isabelle_phabricator_name(name: String = "", ext: String = ""): String =
     "isabelle-" + phabricator_name(name = name, ext = ext)
 
-  def default_root(options: Options, name: String): Path =
-    Path.explode(options.string("phabricator_www_root")) +
-    Path.basic(phabricator_name(name = name))
+  def default_root(name: String): Path =
+    Path.explode("/var/www") + Path.basic(phabricator_name(name = name))
 
-  def default_repo(options: Options, name: String): Path =
-    default_root(options, name) + Path.basic("repo")
+  def default_repo(name: String): Path = default_root(name) + Path.basic("repo")
+
+  val default_mailers: Path = Path.explode("mailers.json")
 
 
 
@@ -65,7 +69,7 @@ object Phabricator
     def home: Path = root + Path.explode(phabricator_name())
 
     def execute(command: String): Process_Result =
-      Isabelle_System.bash("./bin/" + command, cwd = home.file).check
+      Isabelle_System.bash("./bin/" + command, cwd = home.file, redirect = true).check
   }
 
   def read_config(): List[Config] =
@@ -108,7 +112,6 @@ object Phabricator
   }
 
   def phabricator_setup(
-    options: Options,
     name: String = default_name,
     root: String = "",
     repo: String = "",
@@ -118,6 +121,8 @@ object Phabricator
     /* system environment */
 
     Linux.check_system_root()
+
+    progress.echo("System packages ...")
 
     if (package_update) {
       Linux.package_update(progress = progress)
@@ -137,13 +142,13 @@ object Phabricator
     user_setup(daemon_user, "Phabricator Daemon User", ssh_setup = true)
     user_setup(name, "Phabricator SSH User")
 
-    val www_user = options.string("phabricator_www_user")
-
 
     /* basic installation */
 
-    val root_path = if (root.nonEmpty) Path.explode(root) else default_root(options, name)
-    val repo_path = if (repo.nonEmpty) Path.explode(repo) else default_repo(options, name)
+    progress.echo("\nPhabricator installation ...")
+
+    val root_path = if (root.nonEmpty) Path.explode(root) else default_root(name)
+    val repo_path = if (repo.nonEmpty) Path.explode(repo) else default_repo(name)
 
     val configs = read_config()
 
@@ -190,7 +195,7 @@ object Phabricator
 
     /* MySQL setup */
 
-    progress.echo("MySQL setup...")
+    progress.echo("\nMySQL setup ...")
 
     File.write(Path.explode("/etc/mysql/mysql.conf.d/" + phabricator_name(ext = "cnf")),
 """[mysqld]
@@ -203,8 +208,7 @@ local_infile = 0
 
 
     def mysql_conf(R: Regex): Option[String] =
-      split_lines(File.read(Path.explode(options.string("phabricator_mysql_config")))).
-        collectFirst({ case R(a) => a })
+      split_lines(File.read(Path.explode("/etc/mysql/debian.cnf"))).collectFirst({ case R(a) => a })
 
     for (user <- mysql_conf("""^user\s*=\s*(\S*)\s*$""".r)) {
       config.execute("config set mysql.user " + Bash.string(user))
@@ -219,12 +223,12 @@ local_infile = 0
 
     config.execute("config set storage.mysql-engine.max-size 8388608")
 
-    config.execute("storage upgrade --force")
+    progress.bash("./bin/storage upgrade --force", cwd = config.home.file, echo = true).check
 
 
     /* SSH hosting */
 
-    progress.echo("SSH hosting setup...")
+    progress.echo("\nSSH hosting setup ...")
 
     val ssh_port = ssh_alternative2
 
@@ -258,9 +262,9 @@ local_infile = 0
 
     /* Apache setup */
 
-    progress.echo("Apache setup...")
+    progress.echo("Apache setup ...")
 
-    val apache_root = Path.explode(options.string("phabricator_apache_root"))
+    val apache_root = Path.explode("/etc/apache2")
     val apache_sites = apache_root + Path.explode("sites-available")
 
     if (!apache_sites.is_dir) error("Bad Apache sites directory " + apache_sites)
@@ -294,7 +298,7 @@ local_infile = 0
 
     /* PHP daemon */
 
-    progress.echo("PHP daemon setup...")
+    progress.echo("PHP daemon setup ...")
 
     config.execute("config set phd.user " + Bash.string(daemon_user))
 
@@ -328,81 +332,139 @@ WantedBy=multi-user.target
     {
       var repo = ""
       var package_update = false
-      var options = Options.init()
+      var name = default_name
       var root = ""
 
       val getopts =
         Getopts("""
-Usage: isabelle phabricator_setup [OPTIONS] [NAME]
+Usage: isabelle phabricator_setup [OPTIONS]
 
   Options are:
-    -R DIR       repository directory (default: """ + default_repo(options, "NAME") + """)
+    -R DIR       repository directory (default: """ + default_repo("NAME") + """)
     -U           full update of system packages before installation
-    -o OPTION    override Isabelle system OPTION (via NAME=VAL or NAME)
-    -r DIR       installation root directory (default: """ + default_root(options, "NAME") + """)
+    -n NAME      Phabricator installation name (default: """ + quote(default_name) + """)
+    -r DIR       installation root directory (default: """ + default_root("NAME") + """)
 
   Install Phabricator as Ubuntu LAMP application (Linux, Apache, MySQL, PHP).
 
   Slogan: "Discuss. Plan. Code. Review. Test.
   Every application your project needs, all in one tool."
 
-  The installation NAME (default: """ + quote(default_name) + """) is mapped to
-  a regular Unix user and used for public SSH access.
+  The installation name (default: """ + quote(default_name) + """) is mapped to a regular
+  Unix user; this is relevant for public SSH access.
 """,
           "R:" -> (arg => repo = arg),
           "U" -> (_ => package_update = true),
-          "o:" -> (arg => options = options + arg),
+          "n:" -> (arg => name = arg),
           "r:" -> (arg => root = arg))
 
       val more_args = getopts(args)
-
-      val name =
-        more_args match {
-          case Nil => default_name
-          case List(name) => name
-          case _ => getopts.usage()
-        }
+      if (more_args.nonEmpty) getopts.usage()
 
       val progress = new Console_Progress
 
-      phabricator_setup(options, name, root = root, repo = repo,
+      phabricator_setup(name = name, root = root, repo = repo,
         package_update = package_update, progress = progress)
     })
 
 
 
-  /** update **/
+  /** setup mail **/
 
-  def phabricator_update(name: String, progress: Progress = No_Progress)
+  val mailers_template: String =
+"""[
+  {
+    "key": "example.org",
+    "type": "smtp",
+    "options": {
+      "host": "mail.example.org",
+      "port": 465,
+      "user": "phabricator@example.org",
+      "password": "********",
+      "protocol": "ssl",
+      "message-id": true
+    }
+  }
+]"""
+
+  def phabricator_setup_mail(
+    name: String = default_name,
+    config_file: Option[Path] = None,
+    test_user: String = "",
+    progress: Progress = No_Progress)
   {
     Linux.check_system_root()
 
-    ???
+    val config = get_config(name)
+    val default_config_file = config.root + default_mailers
+
+    val mail_config = config_file getOrElse default_config_file
+
+    def setup_mail
+    {
+      progress.echo("Using mail configuration from " + mail_config)
+      config.execute("config set cluster.mailers --stdin < " + File.bash_path(mail_config))
+
+      if (test_user.nonEmpty) {
+        progress.echo("Sending test mail to " + quote(test_user))
+        progress.bash(cwd = config.home.file, echo = true,
+          script = """echo "Test from Phabricator ($(date))" | ./bin/mail send-test --subject "Test" --to """ +
+            Bash.string(test_user)).check
+      }
+    }
+
+    if (config_file.isEmpty) {
+      if (!default_config_file.is_file) {
+        File.write(default_config_file, mailers_template)
+        Isabelle_System.bash("chmod 600 " + File.bash_path(default_config_file)).check
+      }
+      if (File.read(default_config_file) == mailers_template) {
+        progress.echo(
+"""
+Please invoke the tool again, after providing details in
+  """ + default_config_file.implode + """
+
+See also section "Mailer: SMTP" in
+  https://secure.phabricator.com/book/phabricator/article/configuring_outbound_email
+""")
+      }
+      else setup_mail
+    }
+    else setup_mail
   }
 
 
   /* Isabelle tool wrapper */
 
   val isabelle_tool2 =
-    Isabelle_Tool("phabricator_update", "update Phabricator server installation", args =>
+    Isabelle_Tool("phabricator_setup_mail",
+      "setup mail configuration for existing Phabricator server", args =>
     {
+      var test_user = ""
+      var name = default_name
+      var config_file: Option[Path] = None
+
       val getopts =
         Getopts("""
-Usage: isabelle phabricator_update [NAME]
+Usage: isabelle phabricator_setup_mail [OPTIONS]
 
-  Update Phabricator installation, with lookup of NAME (default + """ + quote(default_name) + """)
-  in """ + global_config + "\n")
+  Options are:
+    -T USER      send test mail to Phabricator user
+    -f FILE      config file (default: """ + default_mailers + """ within installation root)
+    -n NAME      Phabricator installation name (default: """ + quote(default_name) + """)
+
+  Provide mail configuration for existing Phabricator installation.
+""",
+          "T:" -> (arg => test_user = arg),
+          "f:" -> (arg => config_file = Some(Path.explode(arg))),
+          "n:" -> (arg => name = arg))
 
       val more_args = getopts(args)
-      val name =
-        more_args match {
-          case Nil => default_name
-          case List(name) => name
-          case _ => getopts.usage()
-        }
+      if (more_args.nonEmpty) getopts.usage()
 
       val progress = new Console_Progress
 
-      phabricator_update(name, progress = progress)
+      phabricator_setup_mail(name = name, config_file = config_file,
+        test_user = test_user, progress = progress)
     })
 }
