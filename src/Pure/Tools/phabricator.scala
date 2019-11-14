@@ -36,9 +36,7 @@ object Phabricator
 
   val daemon_user = "phabricator"
 
-  val ssh_standard = 22
-  val ssh_alternative1 = 222
-  val ssh_alternative2 = 2222
+  val sshd_config = Path.explode("/etc/ssh/sshd_config")
 
 
   /* installation parameters */
@@ -58,6 +56,10 @@ object Phabricator
 
   val default_mailers: Path = Path.explode("mailers.json")
 
+  val default_system_port = 22
+  val alternative_system_port = 222
+  val default_server_port = 2222
+
 
 
   /** global configuration **/
@@ -69,7 +71,7 @@ object Phabricator
     def home: Path = root + Path.explode(phabricator_name())
 
     def execute(command: String): Process_Result =
-      Isabelle_System.bash("./bin/" + command, cwd = home.file, redirect = true).check
+      Isabelle_System.bash("bin/" + command, cwd = home.file, redirect = true).check
   }
 
   def read_config(): List[Config] =
@@ -95,6 +97,49 @@ object Phabricator
   def get_config(name: String): Config =
     read_config().find(config => config.name == name) getOrElse
       error("Bad Isabelle/Phabricator installation " + quote(name))
+
+
+
+  /** command-line tools **/
+
+  /* Isabelle tool wrapper */
+
+  val isabelle_tool1 =
+    Isabelle_Tool("phabricator", "invoke command-line tool within Phabricator home directory", args =>
+    {
+      var list = false
+      var name = default_name
+
+      val getopts =
+        Getopts("""
+Usage: isabelle phabricator [OPTIONS] COMMAND [ARGS...]
+
+  Options are:
+    -l           list available Phabricator installations
+    -n NAME      Phabricator installation name (default: """ + quote(default_name) + """)
+
+  Invoke a command-line tool within the home directory of the named
+  Phabricator installation.
+""",
+          "l" -> (_ => list = true),
+          "n:" -> (arg => name = arg))
+
+      val more_args = getopts(args)
+      if (more_args.isEmpty && !list) getopts.usage()
+
+      val progress = new Console_Progress
+
+      if (list) {
+        for (config <- read_config()) {
+          progress.echo("phabricator " + quote(config.name) + " root " + config.root)
+        }
+      }
+
+      val config = get_config(name)
+
+      val result = progress.bash(Bash.strings(more_args), cwd = config.home.file, echo = true)
+      if (!result.ok) error("Return code: " + result.rc.toString)
+    })
 
 
 
@@ -160,12 +205,13 @@ object Phabricator
       error("Failed to create root directory " + root_path)
     }
 
+    Isabelle_System.chown(Bash.string(www_user) + ":" + Bash.string(www_user), root_path)
+    Isabelle_System.chmod("755", root_path)
+
     progress.bash(cwd = root_path.file, echo = true,
       script = """
         set -e
-        chown """ + Bash.string(www_user) + ":" + Bash.string(www_user) + """ .
-        chmod 755 .
-
+        echo "Cloning distribution repositories"
         git clone https://github.com/phacility/libphutil.git
         git clone https://github.com/phacility/arcanist.git
         git clone https://github.com/phacility/phabricator.git
@@ -179,18 +225,27 @@ object Phabricator
 
     /* local repository directory */
 
+    progress.echo("\nRepository hosting setup ...")
+
     if (!Isabelle_System.bash("mkdir -p " + File.bash_path(repo_path)).ok) {
       error("Failed to create local repository directory " + repo_path)
     }
 
-    Isabelle_System.bash(cwd = repo_path.file,
-      script = """
-        set -e
-        chown -R """ + Bash.string(daemon_user) + ":" + Bash.string(daemon_user) + """ .
-        chmod 755 .
-      """).check
+    Isabelle_System.chown(
+      "-R " + Bash.string(daemon_user) + ":" + Bash.string(daemon_user), repo_path)
+    Isabelle_System.chmod("755", repo_path)
 
     config.execute("config set repository.default-local-path " + File.bash_path(repo_path))
+
+
+    val sudoers_file = Path.explode("/etc/sudoers.d") + Path.basic(isabelle_phabricator_name())
+    File.write(sudoers_file,
+      www_user + " ALL=(" + daemon_user + ") SETENV: NOPASSWD: /usr/bin/git, /usr/bin/hg, /usr/bin/ssh, /usr/bin/id\n" +
+      name + " ALL=(" + daemon_user + ") SETENV: NOPASSWD: /usr/bin/git, /usr/bin/git-upload-pack, /usr/bin/git-receive-pack, /usr/bin/hg, /usr/bin/svnserve, /usr/bin/ssh, /usr/bin/id\n")
+
+    Isabelle_System.chmod("440", sudoers_file)
+
+    config.execute("config set diffusion.ssh-user " + Bash.string(config.name))
 
 
     /* MySQL setup */
@@ -223,24 +278,7 @@ local_infile = 0
 
     config.execute("config set storage.mysql-engine.max-size 8388608")
 
-    progress.bash("./bin/storage upgrade --force", cwd = config.home.file, echo = true).check
-
-
-    /* SSH hosting */
-
-    progress.echo("\nSSH hosting setup ...")
-
-    val ssh_port = ssh_alternative2
-
-    config.execute("config set diffusion.ssh-user " + Bash.string(name))
-    config.execute("config set diffusion.ssh-port " + ssh_port)
-
-    val sudoers_file = Path.explode("/etc/sudoers.d") + Path.basic(isabelle_phabricator_name())
-    File.write(sudoers_file,
-      www_user + " ALL=(" + daemon_user + ") SETENV: NOPASSWD: /usr/bin/git, /usr/bin/hg, /usr/bin/ssh, /usr/bin/id\n" +
-      name + " ALL=(" + daemon_user + ") SETENV: NOPASSWD: /usr/bin/git, /usr/bin/git-upload-pack, /usr/bin/git-receive-pack, /usr/bin/hg, /usr/bin/svnserve, /usr/bin/ssh, /usr/bin/id\n")
-
-    Isabelle_System.bash("chmod 0440 " + File.bash_path(sudoers_file)).check
+    progress.bash("bin/storage upgrade --force", cwd = config.home.file, echo = true).check
 
 
     /* PHP setup */
@@ -301,6 +339,8 @@ local_infile = 0
     progress.echo("PHP daemon setup ...")
 
     config.execute("config set phd.user " + Bash.string(daemon_user))
+    config.execute("config set phd.log-directory /var/tmp/phd/" +
+      isabelle_phabricator_name(name = name) + "/log")
 
     Linux.service_install(isabelle_phabricator_name(name = name),
 """[Unit]
@@ -312,7 +352,7 @@ Type=oneshot
 User=""" + daemon_user + """
 Group=""" + daemon_user + """
 Environment=PATH=/sbin:/usr/sbin:/usr/local/sbin:/usr/local/bin:/usr/bin:/bin
-ExecStart=""" + config.home.implode + """/bin/phd start
+ExecStart=""" + config.home.implode + """/bin/phd start --force
 ExecStop=""" + config.home.implode + """/bin/phd stop
 RemainAfterExit=yes
 
@@ -327,7 +367,7 @@ WantedBy=multi-user.target
 
   /* Isabelle tool wrapper */
 
-  val isabelle_tool1 =
+  val isabelle_tool2 =
     Isabelle_Tool("phabricator_setup", "setup Phabricator server on Ubuntu Linux", args =>
     {
       var repo = ""
@@ -345,10 +385,7 @@ Usage: isabelle phabricator_setup [OPTIONS]
     -n NAME      Phabricator installation name (default: """ + quote(default_name) + """)
     -r DIR       installation root directory (default: """ + default_root("NAME") + """)
 
-  Install Phabricator as Ubuntu LAMP application (Linux, Apache, MySQL, PHP).
-
-  Slogan: "Discuss. Plan. Code. Review. Test.
-  Every application your project needs, all in one tool."
+  Install Phabricator as LAMP application (Linux, Apache, MySQL, PHP).
 
   The installation name (default: """ + quote(default_name) + """) is mapped to a regular
   Unix user; this is relevant for public SSH access.
@@ -408,7 +445,7 @@ Usage: isabelle phabricator_setup [OPTIONS]
       if (test_user.nonEmpty) {
         progress.echo("Sending test mail to " + quote(test_user))
         progress.bash(cwd = config.home.file, echo = true,
-          script = """echo "Test from Phabricator ($(date))" | ./bin/mail send-test --subject "Test" --to """ +
+          script = """echo "Test from Phabricator ($(date))" | bin/mail send-test --subject "Test" --to """ +
             Bash.string(test_user)).check
       }
     }
@@ -416,7 +453,7 @@ Usage: isabelle phabricator_setup [OPTIONS]
     if (config_file.isEmpty) {
       if (!default_config_file.is_file) {
         File.write(default_config_file, mailers_template)
-        Isabelle_System.bash("chmod 600 " + File.bash_path(default_config_file)).check
+        Isabelle_System.chmod("600", default_config_file)
       }
       if (File.read(default_config_file) == mailers_template) {
         progress.echo(
@@ -436,9 +473,9 @@ See also section "Mailer: SMTP" in
 
   /* Isabelle tool wrapper */
 
-  val isabelle_tool2 =
+  val isabelle_tool3 =
     Isabelle_Tool("phabricator_setup_mail",
-      "setup mail configuration for existing Phabricator server", args =>
+      "setup mail for one Phabricator installation", args =>
     {
       var test_user = ""
       var name = default_name
@@ -450,7 +487,7 @@ Usage: isabelle phabricator_setup_mail [OPTIONS]
 
   Options are:
     -T USER      send test mail to Phabricator user
-    -f FILE      config file (default: """ + default_mailers + """ within installation root)
+    -f FILE      config file (default: """ + default_mailers + """ within Phabricator root)
     -n NAME      Phabricator installation name (default: """ + quote(default_name) + """)
 
   Provide mail configuration for existing Phabricator installation.
@@ -466,5 +503,197 @@ Usage: isabelle phabricator_setup_mail [OPTIONS]
 
       phabricator_setup_mail(name = name, config_file = config_file,
         test_user = test_user, progress = progress)
+    })
+
+
+
+  /** setup ssh **/
+
+  /* sshd config */
+
+  private val Port = """^\s*Port\s+(\d+)\s*$""".r
+  private val No_Port = """^#\s*Port\b.*$""".r
+  private val Any_Port = """^#?\s*Port\b.*$""".r
+
+  def conf_ssh_port(port: Int): String =
+    if (port == 22) "#Port 22" else "Port " + port
+
+  def read_ssh_port(conf: Path): Int =
+  {
+    val lines = split_lines(File.read(conf))
+    val ports =
+      lines.flatMap({
+        case Port(Value.Int(p)) => Some(p)
+        case No_Port() => Some(22)
+        case _ => None
+      })
+    ports match {
+      case List(port) => port
+      case Nil => error("Missing Port specification in " + conf)
+      case _ => error("Multiple Port specifications in " + conf)
+    }
+  }
+
+  def write_ssh_port(conf: Path, port: Int): Boolean =
+  {
+    val old_port = read_ssh_port(conf)
+    if (old_port == port) false
+    else {
+      val lines = split_lines(File.read(conf))
+      val lines1 = lines.map({ case Any_Port() => conf_ssh_port(port) case line => line })
+      File.write(conf, cat_lines(lines1))
+      true
+    }
+  }
+
+
+  /* phabricator_setup_ssh */
+
+  def phabricator_setup_ssh(
+    server_port: Int = default_server_port,
+    system_port: Int = default_system_port,
+    test_server: Boolean = false,
+    progress: Progress = No_Progress)
+  {
+    Linux.check_system_root()
+
+    val configs = read_config()
+
+    if (server_port == system_port) {
+      error("Port for Phabricator sshd coincides with system port: " + system_port)
+    }
+
+    val sshd_conf_system = Path.explode("/etc/ssh/sshd_config")
+    val sshd_conf_server = sshd_conf_system.ext(isabelle_phabricator_name())
+
+    val ssh_name = isabelle_phabricator_name(name = "ssh")
+    val ssh_command = Path.explode("/usr/local/bin") + Path.basic(ssh_name)
+
+    Linux.service_shutdown(ssh_name)
+
+    val old_system_port = read_ssh_port(sshd_conf_system)
+    if (old_system_port != system_port) {
+      progress.echo("Reconfigurig system ssh service")
+      Linux.service_shutdown("ssh")
+      write_ssh_port(sshd_conf_system, system_port)
+      Linux.service_start("ssh")
+    }
+
+    progress.echo("Configuring " + ssh_name + " service")
+
+    File.write(ssh_command,
+"""#!/bin/bash
+{
+  while { unset REPLY; read -r; test "$?" = 0 -o -n "$REPLY"; }
+  do
+    NAME="$(echo "$REPLY" | cut -d: -f1)"
+    ROOT="$(echo "$REPLY" | cut -d: -f2)"
+    if [ "$1" = "$NAME" ]
+    then
+      exec "$ROOT/phabricator/bin/ssh-auth" "$@"
+    fi
+  done
+  exit 1
+} < /etc/isabelle-phabricator.conf
+""")
+    Isabelle_System.chmod("755", ssh_command)
+    Isabelle_System.chown("root:root", ssh_command)
+
+    File.write(sshd_conf_server,
+"""# OpenBSD Secure Shell server for Isabelle/Phabricator
+AuthorizedKeysCommand """ + ssh_command.implode + """
+AuthorizedKeysCommandUser """ + daemon_user + """
+AuthorizedKeysFile none
+AllowUsers """ + configs.map(_.name).mkString(" ") + """
+Port """ + server_port + """
+Protocol 2
+PermitRootLogin no
+AllowAgentForwarding no
+AllowTcpForwarding no
+PrintMotd no
+PrintLastLog no
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+PidFile /var/run/""" + ssh_name + """.pid
+""")
+
+    Linux.service_install(ssh_name,
+"""[Unit]
+Description=OpenBSD Secure Shell server for Isabelle/Phabricator
+After=network.target auditd.service
+ConditionPathExists=!/etc/ssh/sshd_not_to_be_run
+
+[Service]
+EnvironmentFile=-/etc/default/ssh
+ExecStartPre=/usr/sbin/sshd -f """ + sshd_conf_server.implode + """ -t
+ExecStart=/usr/sbin/sshd -f """ + sshd_conf_server.implode + """ -D $SSHD_OPTS
+ExecReload=/usr/sbin/sshd -f """ + sshd_conf_server.implode + """ -t
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=on-failure
+RestartPreventExitStatus=255
+Type=notify
+RuntimeDirectory=sshd-phabricator
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target
+Alias=""" + ssh_name + """.service
+""")
+
+    for (config <- configs) {
+      progress.echo("phabricator " + quote(config.name) + " port " +  server_port)
+      config.execute("config set diffusion.ssh-port " + Bash.string(server_port.toString))
+
+      if (test_server) {
+        progress.bash(
+          """unset DISPLAY
+          echo "{}" | ssh -p """ + Bash.string(server_port.toString) +
+          " -o StrictHostKeyChecking=false " +
+          Bash.string(config.name) + """@localhost conduit conduit.ping""").print
+      }
+    }
+  }
+
+
+  /* Isabelle tool wrapper */
+
+  val isabelle_tool4 =
+    Isabelle_Tool("phabricator_setup_ssh",
+      "setup ssh service for all Phabricator installations", args =>
+    {
+      var server_port = default_server_port
+      var system_port = default_system_port
+      var test_server = false
+
+      val getopts =
+        Getopts("""
+Usage: isabelle phabricator_setup_ssh [OPTIONS]
+
+  Options are:
+    -p PORT      sshd port for Phabricator servers (default: """ + default_server_port + """)
+    -q PORT      sshd port for the operating system (default: """ + default_system_port + """)
+    -T           test the ssh service for each Phabricator installation
+
+  Configure ssh service for all Phabricator installations: a separate sshd
+  is run in addition to the one of the operating system, and ports need to
+  be distinct.
+
+  A particular Phabricator installation is addressed by using its
+  name as the ssh user; the actual Phabricator user is determined via
+  stored ssh keys.
+""",
+          "p:" -> (arg => server_port = Value.Int.parse(arg)),
+          "q:" -> (arg => system_port = Value.Int.parse(arg)),
+          "T" -> (_ => test_server = true))
+
+      val more_args = getopts(args)
+      if (more_args.nonEmpty) getopts.usage()
+
+      val progress = new Console_Progress
+
+      phabricator_setup_ssh(
+        server_port = server_port, system_port = system_port, test_server = test_server,
+        progress = progress)
     })
 }
