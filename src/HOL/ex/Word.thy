@@ -12,22 +12,6 @@ begin
 
 subsection \<open>Preliminaries\<close>
 
-lemma length_not_greater_eq_2_iff [simp]:
-  \<open>\<not> 2 \<le> LENGTH('a::len) \<longleftrightarrow> LENGTH('a) = 1\<close>
-  by (auto simp add: not_le dest: less_2_cases)
-
-lemma take_bit_uminus:
-  "take_bit n (- (take_bit n k)) = take_bit n (- k)" for k :: int
-  by (simp add: take_bit_eq_mod mod_minus_eq)
-
-lemma take_bit_minus:
-  "take_bit n (take_bit n k - take_bit n l) = take_bit n (k - l)" for k l :: int
-  by (simp add: take_bit_eq_mod mod_diff_eq)
-
-lemma take_bit_nonnegative [simp]:
-  "take_bit n k \<ge> 0" for k :: int
-  by (simp add: take_bit_eq_mod)
-
 definition signed_take_bit :: "nat \<Rightarrow> int \<Rightarrow> int"
   where signed_take_bit_eq_take_bit:
     "signed_take_bit n k = take_bit (Suc n) (k + 2 ^ n) - 2 ^ n"
@@ -161,10 +145,16 @@ subsubsection \<open>Conversions\<close>
 
 context
   includes lifting_syntax
-  notes transfer_rule_numeral [transfer_rule]
+  notes 
+    transfer_rule_of_bool [transfer_rule]
+    transfer_rule_numeral [transfer_rule]
     transfer_rule_of_nat [transfer_rule]
     transfer_rule_of_int [transfer_rule]
 begin
+
+lemma [transfer_rule]:
+  "((=) ===> (pcr_word :: int \<Rightarrow> 'a::len word \<Rightarrow> bool)) of_bool of_bool"
+  by transfer_prover
 
 lemma [transfer_rule]:
   "((=) ===> (pcr_word :: int \<Rightarrow> 'a::len word \<Rightarrow> bool)) numeral numeral"
@@ -277,26 +267,9 @@ lemma of_int_signed [simp]:
 
 subsubsection \<open>Properties\<close>
 
-lemma length_cases: \<comment> \<open>TODO get rid of\<close>
-  obtains (triv) "LENGTH('a::len) = 1" "take_bit LENGTH('a) 2 = (0 :: int)"
-    | (take_bit_2) "take_bit LENGTH('a) 2 = (2 :: int)"
-proof (cases "LENGTH('a) \<ge> 2")
-  case False
-  then have "LENGTH('a) = 1"
-    by (auto simp add: not_le dest: less_2_cases)
-  then have "take_bit LENGTH('a) 2 = (0 :: int)"
-    by simp
-  with \<open>LENGTH('a) = 1\<close> triv show ?thesis
-    by simp
-next
-  case True
-  then obtain n where "LENGTH('a) = Suc (Suc n)"
-    by (auto dest: le_Suc_ex)
-  then have "take_bit LENGTH('a) 2 = (2 :: int)"
-    by simp
-  with take_bit_2 show ?thesis
-    by simp
-qed
+lemma exp_eq_zero_iff:
+  \<open>(2 :: 'a::len word) ^ n = 0 \<longleftrightarrow> LENGTH('a) \<le> n\<close>
+  by transfer simp
 
 
 subsubsection \<open>Division\<close>
@@ -383,10 +356,10 @@ proof
     by transfer simp
   show even_iff_mod_2_eq_0: "2 dvd a \<longleftrightarrow> a mod 2 = 0"
     for a :: "'a word"
-    by (transfer; cases rule: length_cases [where ?'a = 'a]) (simp_all add: mod_2_eq_odd)
+    by transfer (simp_all add: mod_2_eq_odd)
   show "\<not> 2 dvd a \<longleftrightarrow> a mod 2 = 1"
     for a :: "'a word"
-    by (transfer; cases rule: length_cases [where ?'a = 'a]) (simp_all add: mod_2_eq_odd)
+    by transfer (simp_all add: mod_2_eq_odd)
 qed
 
 
@@ -516,14 +489,14 @@ lemma bit_word_half_eq:
   \<open>(of_bool b + a * 2) div 2 = a\<close>
     if \<open>a < 2 ^ (LENGTH('a) - Suc 0)\<close>
     for a :: \<open>'a::len word\<close>
-proof (cases rule: length_cases [where ?'a = 'a])
-  case triv
+proof (cases \<open>2 \<le> LENGTH('a::len)\<close>)
+  case False
   have \<open>of_bool (odd k) < (1 :: int) \<longleftrightarrow> even k\<close> for k :: int
     by auto
-  with triv that show ?thesis
+  with False that show ?thesis
     by (auto; transfer) simp_all
 next
-  case take_bit_2
+  case True
   obtain n where length: \<open>LENGTH('a) = Suc n\<close>
     by (cases \<open>LENGTH('a)\<close>) simp_all
   show ?thesis proof (cases b)
@@ -539,7 +512,7 @@ next
         by (simp add: take_bit_eq_mod divmod_digit_0)
       ultimately have \<open>take_bit LENGTH('a) (k * 2) = take_bit LENGTH('a) k * 2\<close>
         by (simp add: take_bit_eq_mod)
-      with take_bit_2 show \<open>take_bit LENGTH('a) (take_bit LENGTH('a) (k * 2) div take_bit LENGTH('a) 2)
+      with True show \<open>take_bit LENGTH('a) (take_bit LENGTH('a) (k * 2) div take_bit LENGTH('a) 2)
         = take_bit LENGTH('a) k\<close>
         by simp
     qed
@@ -558,9 +531,9 @@ next
         by (simp add: take_bit_eq_mod divmod_digit_0)
       ultimately have \<open>take_bit LENGTH('a) (1 + k * 2) = 1 + take_bit LENGTH('a) k * 2\<close>
         by (simp add: take_bit_eq_mod)
-      with take_bit_2 show \<open>take_bit LENGTH('a) (take_bit LENGTH('a) (1 + k * 2) div take_bit LENGTH('a) 2)
+      with True show \<open>take_bit LENGTH('a) (take_bit LENGTH('a) (1 + k * 2) div take_bit LENGTH('a) 2)
         = take_bit LENGTH('a) k\<close>
-        by simp
+        by auto
     qed
     ultimately show ?thesis
       by simp
@@ -612,6 +585,9 @@ proof
     if \<open>even a\<close>
     for a :: \<open>'a word\<close>
     using that by transfer (auto dest: le_Suc_ex)
+  show \<open>(2 :: 'a word) ^ m div 2 ^ n = of_bool ((2 :: 'a word) ^ m \<noteq> 0 \<and> n \<le> m) * 2 ^ (m - n)\<close>
+    for m n :: nat
+    by transfer (simp, simp add: exp_div_exp_eq)
   show "a div 2 ^ m div 2 ^ n = a div 2 ^ (m + n)"
     for a :: "'a word" and m n :: nat
     apply transfer
@@ -620,10 +596,7 @@ proof
     done
   show "a mod 2 ^ m mod 2 ^ n = a mod 2 ^ min m n"
     for a :: "'a word" and m n :: nat
-    apply transfer
-    apply (auto simp flip: take_bit_eq_mod)
-    apply (simp add: ac_simps)
-    done
+    by transfer (auto simp flip: take_bit_eq_mod simp add: ac_simps)
   show \<open>a * 2 ^ m mod 2 ^ n = a mod 2 ^ (n - m) * 2 ^ m\<close>
     if \<open>m \<le> n\<close> for a :: "'a word" and m n :: nat
     using that apply transfer
@@ -632,10 +605,25 @@ proof
     done
   show \<open>a div 2 ^ n mod 2 ^ m = a mod (2 ^ (n + m)) div 2 ^ n\<close>
     for a :: "'a word" and m n :: nat
-    apply transfer
-    apply (auto simp add: not_less take_bit_drop_bit ac_simps simp flip: take_bit_eq_mod drop_bit_eq_div split: split_min_lin)
-    done
+    by transfer (auto simp add: not_less take_bit_drop_bit ac_simps simp flip: take_bit_eq_mod drop_bit_eq_div split: split_min_lin)
 qed
+
+context
+  includes lifting_syntax
+begin
+
+lemma transfer_rule_bit_word [transfer_rule]:
+  \<open>((pcr_word :: int \<Rightarrow> 'a::len word \<Rightarrow> bool) ===> (=)) (\<lambda>k n. n < LENGTH('a) \<and> bit k n) bit\<close>
+proof -
+  let ?t = \<open>\<lambda>a n. odd (take_bit LENGTH('a) a div take_bit LENGTH('a) ((2::int) ^ n))\<close>
+  have \<open>((pcr_word :: int \<Rightarrow> 'a word \<Rightarrow> bool) ===> (=)) ?t bit\<close>
+    by (unfold bit_def) transfer_prover
+  also have \<open>?t = (\<lambda>k n. n < LENGTH('a) \<and> bit k n)\<close>
+    by (simp add: fun_eq_iff bit_take_bit_iff flip: bit_def)
+  finally show ?thesis .
+qed
+
+end
 
 instantiation word :: (len) semiring_bit_shifts
 begin
@@ -643,12 +631,12 @@ begin
 lift_definition push_bit_word :: \<open>nat \<Rightarrow> 'a word \<Rightarrow> 'a word\<close>
   is push_bit
 proof -
-  show \<open>Parity.take_bit LENGTH('a) (push_bit n k) = Parity.take_bit LENGTH('a) (push_bit n l)\<close>
-    if \<open>Parity.take_bit LENGTH('a) k = Parity.take_bit LENGTH('a) l\<close> for k l :: int and n :: nat
+  show \<open>take_bit LENGTH('a) (push_bit n k) = take_bit LENGTH('a) (push_bit n l)\<close>
+    if \<open>take_bit LENGTH('a) k = take_bit LENGTH('a) l\<close> for k l :: int and n :: nat
   proof -
     from that
-    have \<open>Parity.take_bit (LENGTH('a) - n) (Parity.take_bit LENGTH('a) k)
-      = Parity.take_bit (LENGTH('a) - n) (Parity.take_bit LENGTH('a) l)\<close>
+    have \<open>take_bit (LENGTH('a) - n) (take_bit LENGTH('a) k)
+      = take_bit (LENGTH('a) - n) (take_bit LENGTH('a) l)\<close>
       by simp
     moreover have \<open>min (LENGTH('a) - n) LENGTH('a) = LENGTH('a) - n\<close>
       by simp
@@ -665,19 +653,7 @@ instance proof
   show \<open>push_bit n a = a * 2 ^ n\<close> for n :: nat and a :: "'a word"
     by transfer (simp add: push_bit_eq_mult)
   show \<open>drop_bit n a = a div 2 ^ n\<close> for n :: nat and a :: "'a word"
-  proof (cases \<open>n < LENGTH('a)\<close>)
-    case True
-    then show ?thesis
-      by transfer
-        (simp add: take_bit_eq_mod drop_bit_eq_div)
-  next
-    case False
-    then obtain m where n: \<open>n = LENGTH('a) + m\<close>
-      by (auto simp add: not_less dest: le_Suc_ex)
-    then show ?thesis
-      by transfer
-        (simp add: take_bit_eq_mod drop_bit_eq_div power_add zdiv_zmult2_eq)
-  qed
+    by transfer (simp flip: drop_bit_eq_div add: drop_bit_take_bit)
 qed
 
 end
@@ -702,25 +678,17 @@ lift_definition xor_word ::  "'a word \<Rightarrow> 'a word \<Rightarrow> 'a wor
   by simp
 
 instance proof
-  interpret bit_word: boolean_algebra "(AND)" "(OR)" NOT 0 "- 1 :: 'a word"
-  proof
-    show "a AND (b OR c) = a AND b OR a AND c"
-      for a b c :: "'a word"
-      by transfer (simp add: bit.conj_disj_distrib)
-    show "a OR b AND c = (a OR b) AND (a OR c)"
-      for a b c :: "'a word"
-      by transfer (simp add: bit.disj_conj_distrib)
-  qed (transfer; simp add: ac_simps)+
-  show "boolean_algebra (AND) (OR) NOT 0 (- 1 :: 'a word)"
-    by (fact bit_word.boolean_algebra_axioms)
-  show "bit_word.xor = ((XOR) :: 'a word \<Rightarrow> _)"
-  proof (rule ext)+
-    fix a b :: "'a word"
-    have "a XOR b = a AND NOT b OR NOT a AND b"
-      by transfer (simp add: bit.xor_def)
-    then show "bit_word.xor a b = a XOR b"
-      by (simp add: bit_word.xor_def)
-  qed
+  fix a b :: \<open>'a word\<close> and n :: nat
+  show \<open>even (- 1 div (2 :: 'a word) ^ n) \<longleftrightarrow> (2 :: 'a word) ^ n = 0\<close>
+    by transfer (simp flip: drop_bit_eq_div add: drop_bit_take_bit)
+  show \<open>bit (NOT a) n \<longleftrightarrow> (2 :: 'a word) ^ n \<noteq> 0 \<and> \<not> bit a n\<close>
+    by transfer (simp add: bit_not_iff)
+  show \<open>bit (a AND b) n \<longleftrightarrow> bit a n \<and> bit b n\<close>
+    by transfer (auto simp add: bit_and_iff)
+  show \<open>bit (a OR b) n \<longleftrightarrow> bit a n \<or> bit b n\<close>
+    by transfer (auto simp add: bit_or_iff)
+  show \<open>bit (a XOR b) n \<longleftrightarrow> bit a n \<noteq> bit b n\<close>
+    by transfer (auto simp add: bit_xor_iff)
 qed
 
 end

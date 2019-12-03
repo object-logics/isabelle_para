@@ -2591,4 +2591,5 @@ lemma connected_complement_homeomorphic_interval:
   shows "connected(-S)"
   using assms path_connected_complement_homeomorphic_interval path_connected_imp_connected by blast
 
+
 end
