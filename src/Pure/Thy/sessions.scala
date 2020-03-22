@@ -222,7 +222,7 @@ object Sessions
               val required_sessions =
                 dependencies.loaded_theories.all_preds(dependencies.theories.map(_.theory))
                   .map(theory => imports_base.theory_qualifier(theory))
-                  .filterNot(_ == info.name)
+                  .filter(name => name != info.name && sessions_structure.defined(name))
 
               val required_subgraph =
                 sessions_structure.imports_graph
@@ -386,6 +386,8 @@ object Sessions
         if (required_theories.isEmpty) (ancestor.get, Nil)
         else {
           val other_name = info.name + "_requirements(" + ancestor.get + ")"
+          Isabelle_System.isabelle_tmp_prefix()
+
           (other_name,
             List(
               make_info(info.options,

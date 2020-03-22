@@ -94,6 +94,19 @@ process. This allows to monitor resource usage etc.
 automatic font scaling is usually absent on Linux, in contrast to
 Windows and macOS.
 
+* The default value for the jEdit property "view.antiAlias" (menu item
+Utilities / Global Options / Text Area / Anti Aliased smooth text) is
+now "subpixel HRGB", instead of former "standard". Especially on Linux
+this often leads to faster text rendering, but can also cause problems
+with odd color shades. An alternative is to switch back to "standard"
+here, and set the following Java system property:
+
+    isabelle jedit -Dsun.java2d.opengl=true
+
+This can be made persistent via JEDIT_JAVA_OPTIONS in
+$ISABELLE_HOME_USER/etc/settings. For the "Isabelle2020" desktop
+application there is a corresponding options file in the same directory.
+
 
 *** Isabelle/VSCode Prover IDE ***
 
@@ -1487,6 +1500,9 @@ ISABELLE_WINDOWS_PLATFORM32, ISABELLE_WINDOWS_PLATFORM64 indicate the
 native Windows platform (independently of the Cygwin installation). This
 is analogous to ISABELLE_PLATFORM, ISABELLE_PLATFORM32,
 ISABELLE_PLATFORM64.
+
+* The command-line tool "isabelle build_docker" has been slightly
+improved: it is now properly documented in the "system" manual.
 
 * Command-line tool "isabelle build_docker" builds a Docker image from
 the Isabelle application bundle for Linux. See also
