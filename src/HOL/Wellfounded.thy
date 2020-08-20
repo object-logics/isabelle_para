@@ -64,6 +64,10 @@ lemma wf_irrefl:
   obtains "(a, a) \<notin> r"
   by (drule wf_not_refl[OF assms])
 
+lemma wf_imp_irrefl:
+  assumes "wf r" shows "irrefl r" 
+  using wf_irrefl [OF assms] by (auto simp add: irrefl_def)
+
 lemma wf_wellorderI:
   assumes wf: "wf {(x::'a::ord, y). x < y}"
     and lin: "OFCLASS('a::ord, linorder_class)"
@@ -766,9 +770,13 @@ subsubsection \<open>Lexicographic combinations\<close>
 
 definition lex_prod :: "('a \<times>'a) set \<Rightarrow> ('b \<times> 'b) set \<Rightarrow> (('a \<times> 'b) \<times> ('a \<times> 'b)) set"
     (infixr "<*lex*>" 80)
-    where "ra <*lex*> rb = {((a, b), (a', b')). (a, a') \<in> ra \<or> a = a' \<and> (b, b') \<in> rb}"
+    where "ra <*lex*> rb = {((a, b), (a', b')). a \<noteq> a' \<and> (a, a') \<in> ra \<or> a = a' \<and> (b, b') \<in> rb}"
 
-lemma in_lex_prod[simp]: "((a, b), (a', b')) \<in> r <*lex*> s \<longleftrightarrow> (a, a') \<in> r \<or> a = a' \<and> (b, b') \<in> s"
+lemma in_lex_prod[simp]: "NO_MATCH less_than r \<Longrightarrow> ((a, b), (a', b')) \<in> r <*lex*> s \<longleftrightarrow> a \<noteq> a' \<and> (a, a') \<in> r \<or> a = a' \<and> (b, b') \<in> s"
+  by (auto simp:lex_prod_def)
+
+text\<open>compared with @{thm[source]in_lex_prod} this yields simpler results\<close>
+lemma in_lex_prod_less_than[simp]: "((a, b), (a', b')) \<in> less_than <*lex*> s \<longleftrightarrow>a<a' \<or> a = a' \<and> (b, b') \<in> s"
   by (auto simp:lex_prod_def)
 
 lemma wf_lex_prod [intro!]:
@@ -795,8 +803,9 @@ proof (rule wfI)
 qed auto
 
 text \<open>\<open><*lex*>\<close> preserves transitivity\<close>
-lemma trans_lex_prod [simp,intro!]: "trans R1 \<Longrightarrow> trans R2 \<Longrightarrow> trans (R1 <*lex*> R2)"
-  unfolding trans_def lex_prod_def by blast
+lemma trans_lex_prod [simp,intro!]: "\<lbrakk>trans R1; trans R2; antisym R1\<rbrakk> \<Longrightarrow> trans (R1 <*lex*> R2)"
+  unfolding trans_def antisym_def lex_prod_def by blast
+
 
 lemma total_on_lex_prod [simp]: "total_on A r \<Longrightarrow> total_on B s \<Longrightarrow> total_on (A \<times> B) (r <*lex*> s)"
   by (auto simp: total_on_def)

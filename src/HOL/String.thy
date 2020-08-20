@@ -158,7 +158,7 @@ lemma UNIV_char_of_nat:
 proof -
   have "range (of_char :: char \<Rightarrow> nat) = of_char ` char_of ` {0::nat..<256}"
     by (auto simp add: range_nat_of_char intro!: image_eqI)
-  with inj_of_char [where ?'a = nat] show ?thesis 
+  with inj_of_char [where ?'a = nat] show ?thesis
     by (simp add: inj_image_eq_iff)
 qed
 
@@ -602,7 +602,7 @@ proof transfer
   fix cs
   assume "\<forall>c\<in>set cs. \<not> digit7 c"
   then show "map (String.ascii_of \<circ> char_of) (map of_char cs) = cs"
-    by (induction cs) (simp_all add: String.ascii_of_idem) 
+    by (induction cs) (simp_all add: String.ascii_of_idem)
 qed
 
 qualified lemma explode_code [code]:
@@ -628,7 +628,7 @@ subsubsection \<open>Technical code generation setup\<close>
 text \<open>Alternative constructor for generated computations\<close>
 
 context
-begin  
+begin
 
 qualified definition Literal' :: "bool \<Rightarrow> bool \<Rightarrow> bool \<Rightarrow> bool \<Rightarrow> bool \<Rightarrow> bool \<Rightarrow> bool \<Rightarrow> String.literal \<Rightarrow> String.literal"
   where [simp]: "Literal' = String.Literal"
