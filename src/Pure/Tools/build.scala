@@ -169,7 +169,6 @@ object Build
     private val graph_file = Isabelle_System.tmp_file("session_graph", "pdf")
     graphview.Graph_File.write(options, graph_file, deps(session_name).session_graph_display)
 
-    private val export_tmp_dir = Isabelle_System.tmp_dir("export")
     private val export_consumer =
       Export.consumer(store.open_database(session_name, output = true), cache = store.xz_cache)
 
@@ -201,7 +200,6 @@ object Build
 
         val env =
           Isabelle_System.settings() +
-            ("ISABELLE_EXPORT_TMP" -> File.standard_path(export_tmp_dir)) +
             ("ISABELLE_ML_DEBUGGER" -> options.bool("ML_debugger").toString)
 
         val is_pure = Sessions.is_pure(session_name)
@@ -413,10 +411,17 @@ object Build
           case errs => result0.errors(errs).error_rc
         }
 
-      Isabelle_System.rm_tree(export_tmp_dir)
+      if (result1.ok) {
+        for (document_output <- proper_string(options.string("document_output"))) {
+          val document_output_dir = info.dir + Path.explode(document_output)
+          Isabelle_System.mkdirs(document_output_dir)
 
-      if (result1.ok)
+          val base = deps(session_name)
+          File.write(document_output_dir + Path.explode("session.tex"),
+            base.session_theories.map(name => "\\input{" + name.theory_base_name + ".tex}\n\n").mkString)
+        }
         Present.finish(progress, store.browser_info, graph_file, info, session_name)
+      }
 
       graph_file.delete
 
