@@ -19,6 +19,7 @@ declare -a SOURCES=(
   src/Pure/Admin/build_log.scala
   src/Pure/Admin/build_polyml.scala
   src/Pure/Admin/build_release.scala
+  src/Pure/Admin/build_sqlite.scala
   src/Pure/Admin/build_status.scala
   src/Pure/Admin/check_sources.scala
   src/Pure/Admin/ci_profile.scala
@@ -123,6 +124,7 @@ declare -a SOURCES=(
   src/Pure/System/getopts.scala
   src/Pure/System/isabelle_charset.scala
   src/Pure/System/isabelle_fonts.scala
+  src/Pure/System/isabelle_platform.scala
   src/Pure/System/isabelle_process.scala
   src/Pure/System/isabelle_system.scala
   src/Pure/System/isabelle_tool.scala

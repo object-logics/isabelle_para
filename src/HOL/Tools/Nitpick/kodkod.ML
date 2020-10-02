@@ -157,8 +157,6 @@ sig
   type raw_bound = n_ary_index * int list list
 
   datatype outcome =
-    JavaNotFound |
-    KodkodiNotInstalled |
     Normal of (int * raw_bound list) list * int list * string |
     TimedOut of int list |
     Error of string * int list
@@ -303,8 +301,6 @@ type problem =
 type raw_bound = n_ary_index * int list list
 
 datatype outcome =
-  JavaNotFound |
-  KodkodiNotInstalled |
   Normal of (int * raw_bound list) list * int list * string |
   TimedOut of int list |
   Error of string * int list
@@ -1039,7 +1035,7 @@ fun uncached_solve_any_problem overlord deadline max_threads0 max_solutions prob
             (timeout, (solve_all, (max_solutions, (max_threads, kki))))
             |> let open XML.Encode in pair int (pair bool (pair int (pair int string))) end
             |> YXML.string_of_body
-            |> \<^scala>\<open>kodkod\<close>
+            |> \<^scala_thread>\<open>kodkod\<close>
             |> YXML.parse_body
             |> let open XML.Decode in triple int string string end
 
@@ -1057,27 +1053,11 @@ fun uncached_solve_any_problem overlord deadline max_threads0 max_solutions prob
             perhaps (try (unprefix "Error: ")))
           |> find_first (fn line => line <> "" andalso line <> "EXIT")
           |> the_default ""
-        fun has_error s =
-          first_error |> Substring.full |> Substring.position s |> snd
-                      |> Substring.isEmpty |> not
       in
-        if null ps then
-          if rc = 130 then
-            raise Exn.Interrupt
-          else if rc = 2 then
-            TimedOut js
-          else if rc = 0 then
-            Normal ([], js, first_error)
-          else if rc = 127 then
-            JavaNotFound
-          else if has_error "NoClassDefFoundError" then
-            KodkodiNotInstalled
-          else if first_error <> "" then
-            Error (first_error, js)
-          else
-            Error ("Unknown error", js)
-        else
-          Normal (ps, js, first_error)
+        if not (null ps) orelse rc = 0 then Normal (ps, js, first_error)
+        else if rc = 2 then TimedOut js
+        else if rc = 130 then raise Exn.Interrupt
+        else Error (if first_error = "" then "Unknown error" else first_error, js)
       end
   end
 
