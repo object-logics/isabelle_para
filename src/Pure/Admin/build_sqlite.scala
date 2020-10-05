@@ -26,12 +26,8 @@ object Build_SQLite
 
     /* component */
 
-    val component_dir = target_dir + Path.basic(download_name)
-    if (component_dir.is_dir) error("Component directory already exists: " + component_dir)
-    else {
-      progress.echo("Component " + component_dir)
-      Isabelle_System.mkdirs(component_dir)
-    }
+    val component_dir = Isabelle_System.new_directory(target_dir + Path.basic(download_name))
+    progress.echo("Component " + component_dir)
 
 
     /* README */
@@ -43,8 +39,7 @@ object Build_SQLite
 
     /* settings */
 
-    val etc_dir = component_dir + Path.basic("etc")
-    Isabelle_System.mkdirs(etc_dir)
+    val etc_dir = Isabelle_System.make_directory(component_dir + Path.basic("etc"))
 
     File.write(etc_dir + Path.basic("settings"),
 """# -*- shell-script -*- :mode=shellscript:
@@ -76,8 +71,7 @@ classpath "$ISABELLE_SQLITE_HOME/""" + download_name + """.jar"
           "org/sqlite/native/Windows/x86_64/sqlitejdbc.dll" -> "x86_64-windows")
 
       for ((file, dir) <- jar_files) {
-        val target = component_dir + Path.explode(dir)
-        Isabelle_System.mkdirs(target)
+        val target = Isabelle_System.make_directory(component_dir + Path.explode(dir))
         File.copy(jar_dir + Path.explode(file), target)
       }
 

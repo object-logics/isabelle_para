@@ -94,8 +94,7 @@ esac
   def extract_archive(dir: Path, archive: Path): (String, JDK_Platform) =
   {
     try {
-      val tmp_dir = dir + Path.explode("tmp")
-      Isabelle_System.mkdirs(tmp_dir)
+      val tmp_dir = Isabelle_System.make_directory(dir + Path.explode("tmp"))
 
       if (archive.get_ext == "zip") {
         Isabelle_System.bash(
@@ -160,7 +159,7 @@ esac
         val jdk_path = Path.explode(jdk_name)
         val component_dir = dir + jdk_path
 
-        Isabelle_System.mkdirs(component_dir + Path.explode("etc"))
+        Isabelle_System.make_directory(component_dir + Path.explode("etc"))
         File.write(Components.settings(component_dir), settings)
         File.write(component_dir + Path.explode("README"), readme(version))
 

@@ -143,7 +143,7 @@ object Build_PolyML
 
     val target = Path.explode(polyml_platform)
     Isabelle_System.rm_tree(target)
-    Isabelle_System.mkdirs(target)
+    Isabelle_System.make_directory(target)
 
     for (file <- info.copy_files ::: ldd_files ::: sha1_files)
       File.copy(Path.explode(file).expand_env(settings), target)
@@ -171,25 +171,21 @@ object Build_PolyML
 
     /* polyc: directory prefix */
 
-    {
-      val polyc_path = target + Path.explode("polyc")
-
-      val Header = "#! */bin/sh".r
-      val polyc_patched =
-        split_lines(File.read(polyc_path)) match {
-          case Header() :: lines =>
-            val lines1 =
-              lines.map(line =>
-                if (line.startsWith("prefix=")) "prefix=\"$(cd \"$(dirname \"$0\")\"; pwd)\""
-                else if (line.startsWith("BINDIR=")) "BINDIR=\"$prefix\""
-                else if (line.startsWith("LIBDIR=")) "LIBDIR=\"$prefix\""
-                else line)
-            cat_lines("#!/usr/bin/env bash" ::lines1)
-          case lines =>
-            error(cat_lines("Cannot patch polyc -- undetected header:" :: lines.take(3)))
-        }
-      File.write(polyc_path, polyc_patched)
-    }
+    val Header = "#! */bin/sh".r
+    File.change(target + Path.explode("polyc"), txt =>
+      split_lines(txt) match {
+        case Header() :: lines =>
+          val lines1 =
+            lines.map(line =>
+              if (line.startsWith("prefix=")) "prefix=\"$(cd \"$(dirname \"$0\")\"; pwd)\""
+              else if (line.startsWith("BINDIR=")) "BINDIR=\"$prefix\""
+              else if (line.startsWith("LIBDIR=")) "LIBDIR=\"$prefix\""
+              else line)
+          cat_lines("#!/usr/bin/env bash" ::lines1)
+        case lines =>
+          error(cat_lines("Cannot patch polyc -- undetected header:" :: lines.take(3)))
+      }
+    )
   }
 
 
@@ -233,16 +229,12 @@ not affect the running ML session. *)
     component_dir: Path,
     sha1_root: Option[Path] = None)
   {
-    if (component_dir.is_file || component_dir.is_dir)
-      error("Component directory already exists: " + component_dir)
-
-    Isabelle_System.mkdirs(component_dir)
+    Isabelle_System.new_directory(component_dir)
     extract_sources(source_archive, component_dir)
 
     File.copy(Path.explode("~~/Admin/polyml/README"), component_dir)
 
-    val etc_dir = component_dir + Path.explode("etc")
-    Isabelle_System.mkdirs(etc_dir)
+    val etc_dir = Isabelle_System.make_directory(component_dir + Path.explode("etc"))
     File.copy(Path.explode("~~/Admin/polyml/settings"), etc_dir)
 
     sha1_root match {

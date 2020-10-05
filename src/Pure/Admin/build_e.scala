@@ -32,19 +32,14 @@ object Build_E
       /* component */
 
       val component_name = "e-" + version
-      val component_dir = target_dir + Path.basic(component_name)
-      if (component_dir.is_dir) error("Component directory already exists: " + component_dir)
-      else {
-        progress.echo("Component " + component_dir)
-        Isabelle_System.mkdirs(component_dir)
-      }
+      val component_dir = Isabelle_System.new_directory(target_dir + Path.basic(component_name))
+      progress.echo("Component " + component_dir)
 
       val platform_name =
         proper_string(Isabelle_System.getenv("ISABELLE_PLATFORM64"))
           .getOrElse(error("No 64bit platform"))
 
-      val platform_dir = component_dir + Path.basic(platform_name)
-      Isabelle_System.mkdirs(platform_dir)
+      val platform_dir = Isabelle_System.make_directory(component_dir + Path.basic(platform_name))
 
 
       /* runepar.pl */
@@ -52,11 +47,10 @@ object Build_E
       val runepar_path = platform_dir + Path.basic("runepar.pl")
       Isabelle_System.download(runepar_url, runepar_path, progress = progress)
 
-      File.write(runepar_path,
-        File.read(runepar_path)
-          .replace("#!/usr/bin/perl", "#!/usr/bin/env perl")
-          .replace("bin/eprover", "$ENV{E_HOME}/eprover")
-          .replace("bin/eproof", "$ENV{E_HOME}/eproof"))
+      File.change(runepar_path,
+       _.replace("#!/usr/bin/perl", "#!/usr/bin/env perl")
+        .replace("bin/eprover", "$ENV{E_HOME}/eprover")
+        .replace("bin/eproof", "$ENV{E_HOME}/eproof"))
 
       File.set_executable(runepar_path, true)
 
@@ -103,16 +97,13 @@ object Build_E
 
       val eproof_ram = platform_dir + Path.basic("eproof_ram")
       if (eproof_ram.is_file) {
-        File.write(eproof_ram,
-          File.read(eproof_ram)
-            .replace("EXECPATH=.", "EXECPATH=`dirname \"$0\"`"))
+        File.change(eproof_ram, _.replace("EXECPATH=.", "EXECPATH=`dirname \"$0\"`"))
       }
 
 
       /* settings */
 
-      val etc_dir = component_dir + Path.basic("etc")
-      Isabelle_System.mkdirs(etc_dir)
+      val etc_dir = Isabelle_System.make_directory(component_dir + Path.basic("etc"))
       File.write(etc_dir + Path.basic("settings"),
         """# -*- shell-script -*- :mode=shellscript:
 
