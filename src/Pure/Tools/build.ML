@@ -55,10 +55,9 @@ fun session_timing f x =
 
 (* build theories *)
 
-fun build_theories symbols last_timing qualifier master_dir (options, thys) =
+fun build_theories last_timing qualifier (options, thys) =
   let
-    val context =
-      {options = options, symbols = symbols, last_timing = last_timing};
+    val context = {options = options, last_timing = last_timing};
     val condition = space_explode "," (Options.string options "condition");
     val conds = filter_out (can getenv_strict) condition;
   in
@@ -66,7 +65,7 @@ fun build_theories symbols last_timing qualifier master_dir (options, thys) =
       (Options.set_default options;
         Isabelle_Process.init_options ();
         Future.fork I;
-        (Thy_Info.use_theories context qualifier master_dir
+        (Thy_Info.use_theories context qualifier
         |>
           (case Options.string options "profiling" of
             "" => I
@@ -87,34 +86,30 @@ val _ =
   Isabelle_Process.protocol_command "build_session"
     (fn [args_yxml] =>
         let
-          val (symbol_codes, (command_timings, (verbose, (browser_info,
-            (documents, (parent_name, (chapter, (session_name, (master_dir,
-            (theories, (session_positions, (session_directories, (session_chapters,
-            (doc_names, (global_theories, (loaded_theories, bibtex_entries)))))))))))))))) =
+          val (html_symbols, (command_timings, (parent_name, (chapter,
+            (session_name, (theories,
+            (session_positions, (session_directories,
+            (session_chapters, (doc_names,
+            (global_theories, (loaded_theories, bibtex_entries)))))))))))) =
             YXML.parse_body args_yxml |>
               let
                 open XML.Decode;
                 val position = Position.of_properties o properties;
-                val path = Path.explode o string;
               in
-                pair (list (pair string int)) (pair (list properties) (pair bool (pair path
-                  (pair (list string) (pair string (pair string (pair string
-                    (pair path
-                      (pair (((list (pair Options.decode (list (pair string position))))))
-                        (pair (list (pair string properties))
-                          (pair (list (pair string string))
-                            (pair (list (pair string string)) (pair (list string)
-                              (pair (list (pair string string)) (pair (list string)
-                                (list (pair string (list string))))))))))))))))))
+                pair (list (pair string int)) (pair (list properties) (pair string (pair string
+                  (pair string (pair (((list (pair Options.decode (list (pair string position))))))
+                    (pair (list (pair string properties)) (pair (list (pair string string))
+                      (pair (list (pair string string)) (pair (list string)
+                        (pair (list (pair string string)) (pair (list string)
+                          (list (pair string (list string))))))))))))))
               end;
-
-          val symbols = HTML.make_symbols symbol_codes;
 
           fun build () =
             let
               val _ =
                 Resources.init_session
-                  {session_positions = session_positions,
+                  {html_symbols = html_symbols,
+                   session_positions = session_positions,
                    session_directories = session_directories,
                    session_chapters = session_chapters,
                    bibtex_entries = bibtex_entries,
@@ -122,21 +117,13 @@ val _ =
                    global_theories = global_theories,
                    loaded_theories = loaded_theories};
 
-              val _ =
-                Session.init
-                  symbols
-                  (Options.default_bool "browser_info")
-                  browser_info
-                  documents
-                  parent_name
-                  (chapter, session_name)
-                  verbose;
+              val _ = Session.init parent_name (chapter, session_name);
 
               val last_timing = get_timings (fold update_timings command_timings empty_timings);
 
               val res1 =
                 theories |>
-                  (List.app (build_theories symbols last_timing session_name master_dir)
+                  (List.app (build_theories last_timing session_name)
                     |> session_timing
                     |> Exn.capture);
               val res2 = Exn.capture Session.finish ();

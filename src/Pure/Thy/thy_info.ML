@@ -18,11 +18,8 @@ sig
   val get_theory: string -> theory
   val master_directory: string -> Path.T
   val remove_thy: string -> unit
-  type context =
-    {options: Options.T,
-     symbols: HTML.symbols,
-     last_timing: Toplevel.transition -> Time.time}
-  val use_theories: context -> string -> Path.T -> (string * Position.T) list -> unit
+  type context = {options: Options.T, last_timing: Toplevel.transition -> Time.time}
+  val use_theories: context -> string -> (string * Position.T) list -> unit
   val use_thy: string -> unit
   val script_thy: Position.T -> string -> theory -> theory
   val register_thy: theory -> unit
@@ -56,6 +53,7 @@ fun add_presentation f = Presentation.map (cons (f, stamp ()));
 
 val _ =
   Theory.setup (add_presentation (fn {options, file_pos, segments, ...} => fn thy =>
+   (Present.export_html thy (map #span segments);
     if exists (Toplevel.is_skipped_proof o #state) segments then ()
     else
       let
@@ -65,11 +63,12 @@ val _ =
         else
           let
             val thy_name = Context.theory_name thy;
-            val document_tex_name = Path.explode_binding0 ("document/" ^ thy_name ^ ".tex");
+            val document_tex_name = Present.document_tex_name thy;
+
             val latex = Latex.isabelle_body thy_name body;
             val output = [Latex.output_text latex, Latex.output_positions file_pos latex];
           in Export.export thy document_tex_name (XML.blob output) end
-      end));
+      end)));
 
 
 
@@ -183,15 +182,10 @@ fun update_thy deps theory = change_thys (update deps theory);
 
 (* context *)
 
-type context =
-  {options: Options.T,
-   symbols: HTML.symbols,
-   last_timing: Toplevel.transition -> Time.time};
+type context = {options: Options.T, last_timing: Toplevel.transition -> Time.time};
 
 fun default_context (): context =
-  {options = Options.default (),
-   symbols = HTML.no_symbols,
-   last_timing = K Time.zeroTime};
+  {options = Options.default (), last_timing = K Time.zeroTime};
 
 
 (* scheduling loader tasks *)
@@ -300,7 +294,7 @@ fun excursion keywords master_dir last_timing init elements =
 
 fun eval_thy (context: context) update_time master_dir header text_pos text parents =
   let
-    val {options, symbols, last_timing} = context;
+    val {options, last_timing} = context;
     val (name, _) = #name header;
     val keywords =
       fold (curry Keyword.merge_keywords o Thy_Header.get_keywords) parents
@@ -309,11 +303,7 @@ fun eval_thy (context: context) update_time master_dir header text_pos text pare
     val spans = Outer_Syntax.parse_spans (Token.explode keywords text_pos text);
     val elements = Thy_Element.parse_elements keywords spans;
 
-    fun init () =
-      Resources.begin_theory master_dir header parents
-      |> Present.begin_theory update_time
-        (fn () => implode (map (HTML.present_span symbols keywords) spans));
-
+    fun init () = Resources.begin_theory master_dir header parents;
     val (results, thy) =
       cond_timeit true ("theory " ^ quote name)
         (fn () => excursion keywords master_dir last_timing init elements);
@@ -438,13 +428,12 @@ end;
 
 (* use theories *)
 
-fun use_theories context qualifier master_dir imports =
-  let val (_, tasks) = require_thys context [] qualifier master_dir imports String_Graph.empty
+fun use_theories context qualifier imports =
+  let val (_, tasks) = require_thys context [] qualifier Path.current imports String_Graph.empty
   in if Multithreading.max_threads () > 1 then schedule_futures tasks else schedule_seq tasks end;
 
 fun use_thy name =
-  use_theories (default_context ()) Resources.default_qualifier
-    Path.current [(name, Position.none)];
+  use_theories (default_context ()) Resources.default_qualifier [(name, Position.none)];
 
 
 (* toplevel scripting -- without maintaining database *)

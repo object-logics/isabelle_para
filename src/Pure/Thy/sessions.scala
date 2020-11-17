@@ -357,7 +357,7 @@ object Sessions
     base: Base,
     infos: List[Info])
   {
-    def check_base: Base = if (errors.isEmpty) base else error(cat_lines(errors))
+    def check: Base_Info = if (errors.isEmpty) this else error(cat_lines(errors))
   }
 
   def base_info(options: Options,
@@ -459,6 +459,8 @@ object Sessions
     export_files: List[(Path, Int, List[String])],
     meta_digest: SHA1.Digest)
   {
+    def chapter_session: Path = Path.basic(chapter) + Path.basic(name)
+
     def deps: List[String] = parent.toList ::: imports
 
     def deps_base(session_bases: String => Base): Base =
@@ -812,7 +814,7 @@ object Sessions
         })
 
     def session_chapters: List[(String, String)] =
-      build_topological_order.map(name => name -> apply(name).chapter)
+      imports_topological_order.map(name => name -> apply(name).chapter)
 
     override def toString: String =
       imports_graph.keys_iterator.mkString("Sessions.Structure(", ", ", ")")
