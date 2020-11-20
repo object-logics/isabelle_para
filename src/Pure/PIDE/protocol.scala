@@ -283,35 +283,10 @@ trait Protocol
     protocol_command("Prover.options", Symbol.encode_yxml(opts.encode))
 
 
-  /* session base */
+  /* resources */
 
-  private def encode_table(table: List[(String, String)]): String =
-  {
-    import XML.Encode._
-    Symbol.encode_yxml(list(pair(string, string))(table))
-  }
-
-  private def encode_list(lst: List[String]): String =
-  {
-    import XML.Encode._
-    Symbol.encode_yxml(list(string)(lst))
-  }
-
-  private def encode_sessions(lst: List[(String, Position.T)]): String =
-  {
-    import XML.Encode._
-    Symbol.encode_yxml(list(pair(string, properties))(lst))
-  }
-
-  def init_session(resources: Resources)
-  {
-    protocol_command("Prover.init_session",
-      encode_sessions(resources.sessions_structure.session_positions),
-      encode_table(resources.sessions_structure.dest_session_directories),
-      encode_list(resources.session_base.doc_names),
-      encode_table(resources.session_base.global_theories.toList),
-      encode_list(resources.session_base.loaded_theories.keys))
-  }
+  def init_session(resources: Resources): Unit =
+    protocol_command("Prover.init_session", resources.init_session_yxml)
 
 
   /* interned items */

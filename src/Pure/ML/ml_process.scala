@@ -78,26 +78,15 @@ object ML_Process
     val eval_options = if (heaps.isEmpty) Nil else List("Options.load_default ()")
 
     // session base
-    val eval_session_base =
+    val init_session = Isabelle_System.tmp_file("init_session")
+    Isabelle_System.chmod("600", File.path(init_session))
+    val eval_init_session =
       session_base match {
         case None => Nil
         case Some(base) =>
-          def print_table(table: List[(String, String)]): String =
-            ML_Syntax.print_list(
-              ML_Syntax.print_pair(
-                ML_Syntax.print_string_bytes, ML_Syntax.print_string_bytes))(table)
-          def print_list(list: List[String]): String =
-            ML_Syntax.print_list(ML_Syntax.print_string_bytes)(list)
-          def print_sessions(list: List[(String, Position.T)]): String =
-            ML_Syntax.print_list(
-              ML_Syntax.print_pair(ML_Syntax.print_string_bytes, ML_Syntax.print_properties))(list)
-
-          List("Resources.init_session" +
-            "{session_positions = " + print_sessions(sessions_structure.session_positions) +
-            ", session_directories = " + print_table(sessions_structure.dest_session_directories) +
-            ", docs = " + print_list(base.doc_names) +
-            ", global_theories = " + print_table(base.global_theories.toList) +
-            ", loaded_theories = " + print_list(base.loaded_theories.keys) + "}")
+          File.write(init_session, new Resources(sessions_structure, base).init_session_yxml)
+          List("Resources.init_session_file (Path.explode " +
+            ML_Syntax.print_string_bytes(File.path(init_session).implode) + ")")
       }
 
     // process
@@ -131,7 +120,7 @@ object ML_Process
     // bash
     val bash_args =
       ml_runtime_options :::
-      (eval_init ::: eval_modes ::: eval_options ::: eval_session_base).flatMap(List("--eval", _)) :::
+      (eval_init ::: eval_modes ::: eval_options ::: eval_init_session).flatMap(List("--eval", _)) :::
       use_prelude.flatMap(List("--use", _)) ::: List("--eval", eval_process) ::: args
 
     Bash.process(
@@ -143,6 +132,7 @@ object ML_Process
       cleanup = () =>
         {
           isabelle_process_options.delete
+          init_session.delete
           Isabelle_System.rm_tree(isabelle_tmp)
           cleanup()
         })
@@ -185,11 +175,11 @@ Usage: isabelle process [OPTIONS]
     val more_args = getopts(args)
     if (args.isEmpty || more_args.nonEmpty) getopts.usage()
 
-    val sessions_structure = Sessions.load_structure(options, dirs = dirs)
+    val base_info = Sessions.base_info(options, logic, dirs = dirs).check
     val store = Sessions.store(options)
-
     val result =
-      ML_Process(options, sessions_structure, store, logic = logic, args = eval_args, modes = modes)
+      ML_Process(options, base_info.sessions_structure, store, logic = logic, args = eval_args,
+        modes = modes, session_base = Some(base_info.base))
         .result(
           progress_stdout = Output.writeln(_, stdout = true),
           progress_stderr = Output.writeln(_))

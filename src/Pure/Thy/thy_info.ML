@@ -1,8 +1,8 @@
 (*  Title:      Pure/Thy/thy_info.ML
-    Author:     Markus Wenzel, TU Muenchen
+    Author:     Makarius
 
 Global theory info database, with auto-loading according to theory and
-file dependencies.
+file dependencies, and presentation of theory documents.
 *)
 
 signature THY_INFO =
@@ -18,12 +18,7 @@ sig
   val get_theory: string -> theory
   val master_directory: string -> Path.T
   val remove_thy: string -> unit
-  type context =
-    {options: Options.T,
-     symbols: HTML.symbols,
-     bibtex_entries: string list,
-     last_timing: Toplevel.transition -> Time.time}
-  val use_theories: context -> string -> Path.T -> (string * Position.T) list -> unit
+  val use_theories: Options.T -> string -> (string * Position.T) list -> unit
   val use_thy: string -> unit
   val script_thy: Position.T -> string -> theory -> theory
   val register_thy: theory -> unit
@@ -33,7 +28,68 @@ end;
 structure Thy_Info: THY_INFO =
 struct
 
-(** presentation of consolidated theory **)
+(** theory presentation **)
+
+(* artefact names *)
+
+fun document_name ext thy =
+  Path.explode_binding0 ("document/" ^ Context.theory_name thy ^ "." ^ ext);
+
+val document_html_name = document_name "html";
+val document_tex_name = document_name "tex";
+
+fun html_name thy = Path.basic (Context.theory_name thy ^ ".html");
+
+
+(* theory as HTML *)
+
+local
+
+fun get_session_chapter thy =
+  let
+    val session = Resources.theory_qualifier (Context.theory_long_name thy);
+    val chapter = Resources.session_chapter session;
+  in (session, chapter) end;
+
+fun theory_link thy thy' =
+  let
+    val ((session, chapter), (session', chapter')) = apply2 get_session_chapter (thy, thy');
+    val link = html_name thy';
+  in
+    if session = session' then link
+    else if chapter = chapter' then Path.parent + Path.basic session' + link
+    else Path.parent + Path.parent + Path.basic chapter' + Path.basic session' + link
+  end;
+
+fun theory_document symbols A Bs body =
+  HTML.begin_document symbols ("Theory " ^ A) ^ "\n" ^
+  HTML.command symbols "theory" ^ " " ^ HTML.name symbols A ^ "<br/>\n" ^
+  (if null Bs then ""
+   else
+    HTML.keyword symbols "imports" ^ " " ^
+      space_implode " " (map (uncurry HTML.href_path o apsnd (HTML.name symbols)) Bs) ^ "<br/>\n") ^
+  "\n</div>\n<div class=\"source\">\n<pre class=\"source\">" ::
+  body @ ["</pre>\n", HTML.end_document];
+
+in
+
+fun export_html thy spans =
+  let
+    val name = Context.theory_name thy;
+    val parents =
+      Theory.parents_of thy |> map (fn thy' =>
+        (Url.File (theory_link thy thy'), Context.theory_name thy'));
+
+    val symbols = Resources.html_symbols ();
+    val keywords = Thy_Header.get_keywords thy;
+    val body = map (HTML.present_span symbols keywords) spans;
+    val html = XML.blob (theory_document symbols name parents body);
+  in Export.export thy (document_html_name thy) html end
+
+end;
+
+
+(* hook for consolidated theory *)
 
 type presentation_context =
   {options: Options.T, file_pos: Position.T, adjust_pos: Position.T -> Position.T,
@@ -57,6 +113,7 @@ fun add_presentation f = Presentation.map (cons (f, stamp ()));
 
 val _ =
   Theory.setup (add_presentation (fn {options, file_pos, segments, ...} => fn thy =>
+   (export_html thy (map #span segments);
     if exists (Toplevel.is_skipped_proof o #state) segments then ()
     else
       let
@@ -66,12 +123,12 @@ val _ =
         else
           let
             val thy_name = Context.theory_name thy;
-            val document_path = Path.basic "document" + Present.tex_path thy_name;
+            val document_tex_name = document_tex_name thy;
 
             val latex = Latex.isabelle_body thy_name body;
             val output = [Latex.output_text latex, Latex.output_positions file_pos latex];
-          in Export.export thy (Path.binding0 document_path) (XML.blob output) end
-      end));
+          in Export.export thy document_tex_name (XML.blob output) end
+      end)));
 
 
 
@@ -183,21 +240,6 @@ fun update deps theory thys =
 fun update_thy deps theory = change_thys (update deps theory);
 
 
-(* context *)
-
-type context =
-  {options: Options.T,
-   symbols: HTML.symbols,
-   bibtex_entries: string list,
-   last_timing: Toplevel.transition -> Time.time};
-
-fun default_context (): context =
-  {options = Options.default (),
-   symbols = HTML.no_symbols,
-   bibtex_entries = [],
-   last_timing = K Time.zeroTime};
-
-
 (* scheduling loader tasks *)
 
 datatype result =
@@ -282,12 +324,12 @@ val schedule_futures = Thread_Attributes.uninterruptible (fn _ => fn tasks =>
 
 (* eval theory *)
 
-fun excursion keywords master_dir last_timing init elements =
+fun excursion keywords master_dir init elements =
   let
     fun prepare_span st span =
       Command_Span.content span
       |> Command.read keywords (Command.read_thy st) master_dir init ([], ~1)
-      |> (fn tr => Toplevel.timing (last_timing tr) tr);
+      |> (fn tr => Toplevel.timing (Resources.last_timing tr) tr);
 
     fun element_result span_elem (st, _) =
       let
@@ -302,9 +344,8 @@ fun excursion keywords master_dir last_timing init elements =
     val thy = Toplevel.end_theory end_pos end_state;
   in (results, thy) end;
 
-fun eval_thy (context: context) update_time master_dir header text_pos text parents =
+fun eval_thy options update_time master_dir header text_pos text parents =
   let
-    val {options, symbols, bibtex_entries, last_timing} = context;
     val (name, _) = #name header;
     val keywords =
       fold (curry Keyword.merge_keywords o Thy_Header.get_keywords) parents
@@ -313,14 +354,10 @@ fun eval_thy (context: context) update_time master_dir header text_pos text pare
     val spans = Outer_Syntax.parse_spans (Token.explode keywords text_pos text);
     val elements = Thy_Element.parse_elements keywords spans;
 
-    fun init () =
-      Resources.begin_theory master_dir header parents
-      |> Present.begin_theory bibtex_entries update_time
-        (fn () => implode (map (HTML.present_span symbols keywords) spans));
-
+    fun init () = Resources.begin_theory master_dir header parents;
     val (results, thy) =
       cond_timeit true ("theory " ^ quote name)
-        (fn () => excursion keywords master_dir last_timing init elements);
+        (fn () => excursion keywords master_dir init elements);
 
     fun present () =
       let
@@ -339,7 +376,7 @@ local
 fun required_by _ [] = ""
   | required_by s initiators = s ^ "(required by " ^ show_path (rev initiators) ^ ")";
 
-fun load_thy context initiators update_time deps text (name, pos) keywords parents =
+fun load_thy options initiators update_time deps text (name, pos) keywords parents =
   let
     val _ = remove_thy name;
     val _ = writeln ("Loading theory " ^ quote name ^ required_by " " initiators);
@@ -362,7 +399,7 @@ fun load_thy context initiators update_time deps text (name, pos) keywords paren
 
     val text_pos = Position.put_id (Document_ID.print exec_id) (Path.position thy_path);
     val (theory, present, weight) =
-      eval_thy context update_time dir header text_pos text
+      eval_thy options update_time dir header text_pos text
         (if name = Context.PureN then [Context.the_global_context ()] else parents);
 
     val timing_result = Timing.result timing_start;
@@ -394,9 +431,9 @@ fun check_thy_deps dir name =
 
 in
 
-fun require_thys context initiators qualifier dir strs tasks =
-      fold_map (require_thy context initiators qualifier dir) strs tasks |>> forall I
-and require_thy context initiators qualifier dir (s, require_pos) tasks =
+fun require_thys options initiators qualifier dir strs tasks =
+      fold_map (require_thy options initiators qualifier dir) strs tasks |>> forall I
+and require_thy options initiators qualifier dir (s, require_pos) tasks =
   let
     val {master_dir, theory_name, ...} = Resources.import_name qualifier dir s;
   in
@@ -417,7 +454,7 @@ and require_thy context initiators qualifier dir (s, require_pos) tasks =
 
           val parents = map (#theory_name o Resources.import_name qualifier' dir' o #1) imports;
           val (parents_current, tasks') =
-            require_thys context (theory_name :: initiators) qualifier' dir' imports tasks;
+            require_thys options (theory_name :: initiators) qualifier' dir' imports tasks;
 
           val all_current = current andalso parents_current;
           val task =
@@ -429,7 +466,7 @@ and require_thy context initiators qualifier dir (s, require_pos) tasks =
                   let
                     val update_time = serial ();
                     val load =
-                      load_thy context initiators update_time
+                      load_thy options initiators update_time
                         dep text (theory_name, theory_pos) keywords;
                   in Task (parents, load) end);
 
@@ -442,13 +479,12 @@ end;
 
 (* use theories *)
 
-fun use_theories context qualifier master_dir imports =
-  let val (_, tasks) = require_thys context [] qualifier master_dir imports String_Graph.empty
+fun use_theories options qualifier imports =
+  let val (_, tasks) = require_thys options [] qualifier Path.current imports String_Graph.empty
   in if Multithreading.max_threads () > 1 then schedule_futures tasks else schedule_seq tasks end;
 
 fun use_thy name =
-  use_theories (default_context ()) Resources.default_qualifier
-    Path.current [(name, Position.none)];
+  use_theories (Options.default ()) Resources.default_qualifier [(name, Position.none)];
 
 
 (* toplevel scripting -- without maintaining database *)

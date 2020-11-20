@@ -55,7 +55,8 @@ text \<open>
     @{syntax_def session_entry}: @'session' @{syntax system_name} groups? dir? '=' \<newline>
       (@{syntax system_name} '+')? description? options? \<newline>
       sessions? directories? (theories*) \<newline>
-      (document_files*) (export_files*)
+      (document_theories?) (document_files*) \<newline>
+      (export_files*)
     ;
     groups: '(' (@{syntax name} +) ')'
     ;
@@ -76,6 +77,8 @@ text \<open>
     theories: @'theories' opts? (theory_entry+)
     ;
     theory_entry: @{syntax system_name} ('(' @'global' ')')?
+    ;
+    document_theories: @'document_theories' (@{syntax name}+)
     ;
     document_files: @'document_files' ('(' dir ')')? (@{syntax embedded}+)
     ;
@@ -144,6 +147,13 @@ text \<open>
   entry points to major logic sessions: \<open>Pure\<close>, \<open>Main\<close>, \<open>Complex_Main\<close>,
   \<open>HOLCF\<close>, \<open>IFOL\<close>, \<open>FOL\<close>, \<open>ZF\<close>, \<open>ZFC\<close> etc. Regular Isabelle applications
   should not claim any global theory names.
+
+  \<^descr> \isakeyword{document_theories}~\<open>names\<close> specifies theories from other
+  sessions that should be included in the generated document source directory.
+  These theories need to be explicit imports in the current session, or
+  impliciti imports from the underlying hierarchy of parent sessions. The
+  generated \<^verbatim>\<open>session.tex\<close> file is not affected: the session's {\LaTeX} setup
+  needs to \<^verbatim>\<open>\input{\<close>\<open>\<dots>\<close>\<^verbatim>\<open>}\<close> generated \<^verbatim>\<open>.tex\<close> files separately.
 
   \<^descr> \isakeyword{document_files}~\<open>(\<close>\isakeyword{in}~\<open>base_dir) files\<close> lists
   source files for document preparation, typically \<^verbatim>\<open>.tex\<close> and \<^verbatim>\<open>.sty\<close> for
@@ -307,6 +317,7 @@ text \<open>
     -B NAME      include session NAME and all descendants
     -D DIR       include session directory and select its sessions
     -N           cyclic shuffling of NUMA CPU nodes (performance tuning)
+    -P DIR       enable HTML/PDF presentation in directory (":" for default)
     -R           refer to requirements of selected sessions
     -S           soft build: only observe changes of sources, not heap images
     -X NAME      exclude sessions from group NAME and all descendants
@@ -390,6 +401,11 @@ text \<open>
   command line via \<^verbatim>\<open>-o\<close>~\<open>name\<close>\<^verbatim>\<open>=\<close>\<open>value\<close> or \<^verbatim>\<open>-o\<close>~\<open>name\<close>, which abbreviates
   \<^verbatim>\<open>-o\<close>~\<open>name\<close>\<^verbatim>\<open>=true\<close> for Boolean options. Multiple occurrences of \<^verbatim>\<open>-o\<close> on
   the command-line are applied in the given order.
+
+  \<^medskip>
+  Option \<^verbatim>\<open>-P\<close> enables PDF/HTML presentation in the given directory, where
+  ``\<^verbatim>\<open>-P:\<close>'' refers to the default @{setting_ref ISABELLE_BROWSER_INFO} (or
+  @{setting_ref ISABELLE_BROWSER_INFO_SYSTEM}).
 
   \<^medskip>
   Option \<^verbatim>\<open>-b\<close> ensures that heap images are produced for all selected

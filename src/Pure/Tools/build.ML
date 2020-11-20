@@ -7,38 +7,6 @@ Build Isabelle sessions.
 structure Build: sig end =
 struct
 
-(* command timings *)
-
-type timings = ((string * Time.time) Inttab.table) Symtab.table;  (*file -> offset -> name, time*)
-
-val empty_timings: timings = Symtab.empty;
-
-fun update_timings props =
-  (case Markup.parse_command_timing_properties props of
-    SOME ({file, offset, name}, time) =>
-      Symtab.map_default (file, Inttab.empty)
-        (Inttab.map_default (offset, (name, time)) (fn (_, t) => (name, t + time)))
-  | NONE => I);
-
-fun approximative_id name pos =
-  (case (Position.file_of pos, Position.offset_of pos) of
-    (SOME file, SOME offset) =>
-      if name = "" then NONE else SOME {file = file, offset = offset, name = name}
-  | _ => NONE);
-
-fun get_timings timings tr =
-  (case approximative_id (Toplevel.name_of tr) (Toplevel.pos_of tr) of
-    SOME {file, offset, name} =>
-      (case Symtab.lookup timings file of
-        SOME offsets =>
-          (case Inttab.lookup offsets offset of
-            SOME (name', time) => if name = name' then SOME time else NONE
-          | NONE => NONE)
-      | NONE => NONE)
-  | NONE => NONE)
-  |> the_default Time.zeroTime;
-
-
 (* session timing *)
 
 fun session_timing f x =
@@ -55,11 +23,8 @@ fun session_timing f x =
 
 (* build theories *)
 
-fun build_theories symbols bibtex_entries last_timing qualifier master_dir (options, thys) =
+fun build_theories qualifier (options, thys) =
   let
-    val context =
-      {options = options, symbols = symbols, bibtex_entries = bibtex_entries,
-        last_timing = last_timing};
     val condition = space_explode "," (Options.string options "condition");
     val conds = filter_out (can getenv_strict) condition;
   in
@@ -67,7 +32,7 @@ fun build_theories symbols bibtex_entries last_timing qualifier master_dir (opti
       (Options.set_default options;
         Isabelle_Process.init_options ();
         Future.fork I;
-        (Thy_Info.use_theories context qualifier master_dir
+        (Thy_Info.use_theories options qualifier
         |>
           (case Options.string options "profiling" of
             "" => I
@@ -86,55 +51,23 @@ fun build_theories symbols bibtex_entries last_timing qualifier master_dir (opti
 
 val _ =
   Isabelle_Process.protocol_command "build_session"
-    (fn [args_yxml] =>
+    (fn [resources_yxml, args_yxml] =>
         let
-          val (symbol_codes, (command_timings, (verbose, (browser_info,
-            (documents, (parent_name, (chapter, (session_name, (master_dir,
-            (theories, (session_positions, (session_directories, (doc_names, (global_theories,
-            (loaded_theories, bibtex_entries))))))))))))))) =
+          val _ = Resources.init_session_yxml resources_yxml;
+          val (session_name, theories) =
             YXML.parse_body args_yxml |>
               let
                 open XML.Decode;
                 val position = Position.of_properties o properties;
-                val path = Path.explode o string;
-              in
-                pair (list (pair string int)) (pair (list properties) (pair bool (pair path
-                  (pair (list string) (pair string (pair string (pair string
-                    (pair path
-                      (pair (((list (pair Options.decode (list (pair string position))))))
-                        (pair (list (pair string properties))
-                          (pair (list (pair string string)) (pair (list string)
-                            (pair (list (pair string string)) (pair (list string) (list string)))))))))))))))
-              end;
+              in pair string (list (pair Options.decode (list (pair string position)))) end;
 
-          val symbols = HTML.make_symbols symbol_codes;
+          val _ = Session.init session_name;
 
           fun build () =
             let
-              val _ =
-                Resources.init_session
-                  {session_positions = session_positions,
-                   session_directories = session_directories,
-                   docs = doc_names,
-                   global_theories = global_theories,
-                   loaded_theories = loaded_theories};
-
-              val _ =
-                Session.init
-                  symbols
-                  (Options.default_bool "browser_info")
-                  browser_info
-                  documents
-                  parent_name
-                  (chapter, session_name)
-                  verbose;
-
-              val last_timing = get_timings (fold update_timings command_timings empty_timings);
-
               val res1 =
                 theories |>
-                  (List.app
-                      (build_theories symbols bibtex_entries last_timing session_name master_dir)
+                  (List.app (build_theories session_name)
                     |> session_timing
                     |> Exn.capture);
               val res2 = Exn.capture Session.finish ();

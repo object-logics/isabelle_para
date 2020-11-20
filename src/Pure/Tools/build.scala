@@ -8,7 +8,7 @@ Build and manage Isabelle sessions.
 package isabelle
 
 
-import scala.collection.{SortedSet, mutable}
+import scala.collection.SortedSet
 import scala.annotation.tailrec
 
 
@@ -38,7 +38,7 @@ object Build
     {
       val no_timings: Timings = (Nil, 0.0)
 
-      store.access_database(session_name) match {
+      store.try_open_database(session_name) match {
         case None => no_timings
         case Some(db) =>
           def ignore_error(msg: String) =
@@ -148,317 +148,6 @@ object Build
   }
 
 
-  /* PIDE protocol handler */
-
-  /* job: running prover process */
-
-  private class Job(progress: Progress,
-    session_name: String,
-    val info: Sessions.Info,
-    deps: Sessions.Deps,
-    store: Sessions.Store,
-    do_store: Boolean,
-    verbose: Boolean,
-    val numa_node: Option[Int],
-    command_timings0: List[Properties.T])
-  {
-    val options: Options = NUMA.policy_options(info.options, numa_node)
-
-    private val sessions_structure = deps.sessions_structure
-    private val documents = info.documents.map(_._1)
-
-    private val future_result: Future[Process_Result] =
-      Future.thread("build", uninterruptible = true) {
-        val parent = info.parent.getOrElse("")
-        val base = deps(parent)
-        val args_yxml =
-          YXML.string_of_body(
-            {
-              import XML.Encode._
-              pair(list(pair(string, int)), pair(list(properties), pair(bool, pair(Path.encode,
-                pair(list(string), pair(string, pair(string, pair(string, pair(Path.encode,
-                pair(list(pair(Options.encode, list(pair(string, properties)))),
-                pair(list(pair(string, properties)),
-                pair(list(pair(string, string)),
-                pair(list(string), pair(list(pair(string, string)),
-                pair(list(string), list(string))))))))))))))))(
-              (Symbol.codes, (command_timings0, (verbose, (store.browser_info,
-                (documents, (parent, (info.chapter, (session_name, (Path.current,
-                (info.theories,
-                (sessions_structure.session_positions,
-                (sessions_structure.dest_session_directories,
-                (base.doc_names, (base.global_theories.toList,
-                (base.loaded_theories.keys, info.bibtex_entries.map(_.info)))))))))))))))))
-            })
-
-        val env =
-          Isabelle_System.settings() +
-            ("ISABELLE_ML_DEBUGGER" -> options.bool("ML_debugger").toString)
-
-        val is_pure = Sessions.is_pure(session_name)
-
-        val use_prelude = if (is_pure) Thy_Header.ml_roots.map(_._1) else Nil
-
-        val eval_store =
-          if (do_store) {
-            (if (info.theories.nonEmpty) List("ML_Heap.share_common_data ()") else Nil) :::
-            List("ML_Heap.save_child " +
-              ML_Syntax.print_string_bytes(File.platform_path(store.output_heap(session_name))))
-          }
-          else Nil
-
-        val resources = new Resources(sessions_structure, deps(parent))
-        val session =
-          new Session(options, resources) {
-            override val xml_cache: XML.Cache = store.xml_cache
-            override val xz_cache: XZ.Cache = store.xz_cache
-          }
-
-        object Build_Session_Errors
-        {
-          private val promise: Promise[List[String]] = Future.promise
-
-          def result: Exn.Result[List[String]] = promise.join_result
-          def cancel: Unit = promise.cancel
-          def apply(errs: List[String])
-          {
-            try { promise.fulfill(errs) }
-            catch { case _: IllegalStateException => }
-          }
-        }
-
-        val export_consumer =
-          Export.consumer(store.open_database(session_name, output = true), cache = store.xz_cache)
-
-        val stdout = new StringBuilder(1000)
-        val stderr = new StringBuilder(1000)
-        val messages = new mutable.ListBuffer[XML.Elem]
-        val command_timings = new mutable.ListBuffer[Properties.T]
-        val theory_timings = new mutable.ListBuffer[Properties.T]
-        val session_timings = new mutable.ListBuffer[Properties.T]
-        val runtime_statistics = new mutable.ListBuffer[Properties.T]
-        val task_statistics = new mutable.ListBuffer[Properties.T]
-        val document_output = new mutable.ListBuffer[String]
-
-        def fun(
-          name: String,
-          acc: mutable.ListBuffer[Properties.T],
-          unapply: Properties.T => Option[Properties.T]): (String, Session.Protocol_Function) =
-        {
-          name -> ((msg: Prover.Protocol_Output) =>
-            unapply(msg.properties) match {
-              case Some(props) => acc += props; true
-              case _ => false
-            })
-        }
-
-        session.init_protocol_handler(new Session.Protocol_Handler
-          {
-            override def exit() { Build_Session_Errors.cancel }
-
-            private def build_session_finished(msg: Prover.Protocol_Output): Boolean =
-            {
-              val (rc, errors) =
-                try {
-                  val (rc, errs) =
-                  {
-                    import XML.Decode._
-                    pair(int, list(x => x))(Symbol.decode_yxml(msg.text))
-                  }
-                  val errors =
-                    for (err <- errs) yield {
-                      val prt = Protocol_Message.expose_no_reports(err)
-                      Pretty.string_of(prt, metric = Symbol.Metric)
-                    }
-                  (rc, errors)
-                }
-                catch { case ERROR(err) => (2, List(err)) }
-
-              session.protocol_command("Prover.stop", rc.toString)
-              Build_Session_Errors(errors)
-              true
-            }
-
-            private def loading_theory(msg: Prover.Protocol_Output): Boolean =
-              msg.properties match {
-                case Markup.Loading_Theory(name) =>
-                  progress.theory(Progress.Theory(name, session = session_name))
-                  true
-                case _ => false
-              }
-
-            private def export(msg: Prover.Protocol_Output): Boolean =
-              msg.properties match {
-                case Protocol.Export(args) =>
-                  export_consumer(session_name, args, msg.bytes)
-                  true
-                case _ => false
-              }
-
-            private def command_timing(props: Properties.T): Option[Properties.T] =
-              for {
-                props1 <- Markup.Command_Timing.unapply(props)
-                elapsed <- Markup.Elapsed.unapply(props1)
-                elapsed_time = Time.seconds(elapsed)
-                if elapsed_time.is_relevant && elapsed_time >= options.seconds("command_timing_threshold")
-              } yield props1.filter(p => Markup.command_timing_properties(p._1))
-
-            override val functions =
-              List(
-                Markup.Build_Session_Finished.name -> build_session_finished,
-                Markup.Loading_Theory.name -> loading_theory,
-                Markup.EXPORT -> export,
-                fun(Markup.Command_Timing.name, command_timings, command_timing),
-                fun(Markup.Theory_Timing.name, theory_timings, Markup.Theory_Timing.unapply),
-                fun(Markup.Session_Timing.name, session_timings, Markup.Session_Timing.unapply),
-                fun(Markup.Task_Statistics.name, task_statistics, Markup.Task_Statistics.unapply))
-          })
-
-        session.runtime_statistics += Session.Consumer("ML_statistics")
-          {
-            case Session.Runtime_Statistics(props) => runtime_statistics += props
-          }
-
-        session.all_messages += Session.Consumer[Any]("build_session_output")
-          {
-            case msg: Prover.Output =>
-              val message = msg.message
-              if (msg.is_stdout) {
-                stdout ++= Symbol.encode(XML.content(message))
-              }
-              else if (msg.is_stderr) {
-                stderr ++= Symbol.encode(XML.content(message))
-              }
-              else if (Protocol.is_exported(message)) {
-                messages += message
-              }
-              else if (msg.is_exit) {
-                val err =
-                  "Prover terminated" +
-                    (msg.properties match {
-                      case Markup.Process_Result(result) => ": " + result.print_rc
-                      case _ => ""
-                    })
-                Build_Session_Errors(List(err))
-              }
-            case _ =>
-          }
-
-        val eval_main = Command_Line.ML_tool("Isabelle_Process.init_build ()" :: eval_store)
-
-        val process =
-          Isabelle_Process(session, options, sessions_structure, store,
-            logic = parent, raw_ml_system = is_pure,
-            use_prelude = use_prelude, eval_main = eval_main,
-            cwd = info.dir.file, env = env)
-
-        val build_errors =
-          Isabelle_Thread.interrupt_handler(_ => process.terminate) {
-            Exn.capture { process.await_startup } match {
-              case Exn.Res(_) =>
-                session.protocol_command("build_session", args_yxml)
-                Build_Session_Errors.result
-              case Exn.Exn(exn) => Exn.Res(List(Exn.message(exn)))
-            }
-          }
-
-        val process_result =
-          Isabelle_Thread.interrupt_handler(_ => process.terminate) { process.await_shutdown }
-
-        val export_errors =
-          export_consumer.shutdown(close = true).map(Output.error_message_text)
-
-        val document_errors =
-          try {
-            if (build_errors.isInstanceOf[Exn.Res[_]] && process_result.ok && documents.nonEmpty) {
-              val document_progress =
-                new Progress {
-                  override def echo(msg: String): Unit =
-                    document_output.synchronized { document_output += msg }
-                  override def echo_document(path: Path): Unit =
-                    progress.echo_document(path)
-                }
-              Present.build_documents(session_name, deps, store, verbose = verbose,
-                verbose_latex = true, progress = document_progress)
-            }
-            val graph_pdf =
-              graphview.Graph_File.make_pdf(options, deps(session_name).session_graph_display)
-            Present.finish(store.browser_info, graph_pdf, info, session_name)
-            Nil
-          }
-          catch { case ERROR(msg) => List(msg) case e@Exn.Interrupt() => List(Exn.message(e)) }
-
-        val result =
-        {
-          val more_output =
-            Library.trim_line(stdout.toString) ::
-              messages.toList.map(message =>
-                Symbol.encode(Protocol.message_text(List(message), metric = Symbol.Metric))) :::
-              command_timings.toList.map(Protocol.Command_Timing_Marker.apply) :::
-              theory_timings.toList.map(Protocol.Theory_Timing_Marker.apply) :::
-              session_timings.toList.map(Protocol.Session_Timing_Marker.apply) :::
-              runtime_statistics.toList.map(Protocol.ML_Statistics_Marker.apply) :::
-              task_statistics.toList.map(Protocol.Task_Statistics_Marker.apply) :::
-              document_output.toList
-
-          val more_errors =
-            Library.trim_line(stderr.toString) :: export_errors ::: document_errors
-
-          process_result.output(more_output).errors(more_errors)
-        }
-
-        build_errors match {
-          case Exn.Res(build_errs) =>
-            val errs = build_errs ::: document_errors
-            if (errs.isEmpty) result
-            else {
-              result.error_rc.output(
-                errs.flatMap(s => split_lines(Output.error_message_text(s))) :::
-                  errs.map(Protocol.Error_Message_Marker.apply))
-            }
-          case Exn.Exn(Exn.Interrupt()) =>
-            if (result.ok) result.copy(rc = Exn.Interrupt.return_code) else result
-          case Exn.Exn(exn) => throw exn
-        }
-      }
-
-    def terminate: Unit = future_result.cancel
-    def is_finished: Boolean = future_result.is_finished
-
-    private val timeout_request: Option[Event_Timer.Request] =
-    {
-      if (info.timeout > Time.zero)
-        Some(Event_Timer.request(Time.now() + info.timeout) { terminate })
-      else None
-    }
-
-    def join: (Process_Result, Option[String]) =
-    {
-      val result1 = future_result.join
-
-      val was_timeout =
-        timeout_request match {
-          case None => false
-          case Some(request) => !request.cancel
-        }
-
-      val result2 =
-        if (result1.interrupted) {
-          if (was_timeout) result1.error(Output.error_message_text("Timeout")).was_timeout
-          else result1.error(Output.error_message_text("Interrupt"))
-        }
-        else result1
-
-      val heap_digest =
-        if (result2.ok && do_store && store.output_heap(session_name).is_file)
-          Some(Sessions.write_heap_digest(store.output_heap(session_name)))
-        else None
-
-      (result2, heap_digest)
-    }
-  }
-
-
 
   /** build with results **/
 
@@ -490,6 +179,7 @@ object Build
   def build(
     options: Options,
     selection: Sessions.Selection = Sessions.Selection.empty,
+    presentation: Presentation.Context = Presentation.Context.none,
     progress: Progress = new Progress,
     check_unknown_files: Boolean = false,
     build_heap: Boolean = false,
@@ -529,7 +219,7 @@ object Build
         full_sessions(session_name).meta_digest ::
         deps.sources(session_name) :::
         deps.imported_sources(session_name)
-      SHA1.digest(cat_lines(digests.map(_.toString).sorted)).toString
+      SHA1.digest_set(digests).toString
     }
 
     val deps =
@@ -542,7 +232,7 @@ object Build
       if (soft_build && !fresh_build) {
         val outdated =
           deps0.sessions_structure.build_topological_order.flatMap(name =>
-            store.access_database(name) match {
+            store.try_open_database(name) match {
               case Some(db) =>
                 using(db)(store.read_build(_, name)) match {
                   case Some(build)
@@ -617,7 +307,7 @@ object Build
 
     @tailrec def loop(
       pending: Queue,
-      running: Map[String, (List[String], Job)],
+      running: Map[String, (List[String], Build_Job)],
       results: Map[String, Result]): Map[String, Result] =
     {
       def used_node(i: Int): Boolean =
@@ -699,7 +389,7 @@ object Build
 
                 val (current, heap_digest) =
                 {
-                  store.access_database(session_name) match {
+                  store.try_open_database(session_name) match {
                     case Some(db) =>
                       using(db)(store.read_build(_, session_name)) match {
                         case Some(build) =>
@@ -738,8 +428,8 @@ object Build
 
                   val numa_node = numa_nodes.next(used_node)
                   val job =
-                    new Job(progress, session_name, info, deps, store, do_store, verbose,
-                      numa_node, queue.command_timings(session_name))
+                    new Build_Job(progress, session_name, info, deps, store, do_store, presentation,
+                      verbose, numa_node, queue.command_timings(session_name))
                   loop(pending, running + (session_name -> (ancestor_heaps, job)), results)
                 }
                 else {
@@ -803,14 +493,16 @@ object Build
           (name, result) <- results0.iterator
           if result.ok
           info = full_sessions(name)
-          if info.options.bool("browser_info")
+          if presentation.enabled(info)
         } yield (info.chapter, (name, info.description))).toList.groupBy(_._1).
             map({ case (chapter, es) => (chapter, es.map(_._2)) }).filterNot(_._2.isEmpty)
 
-      for ((chapter, entries) <- browser_chapters)
-        Present.update_chapter_index(store.browser_info, chapter, entries)
+      val dir = presentation.dir(store)
 
-      if (browser_chapters.nonEmpty) Present.make_global_index(store.browser_info)
+      for ((chapter, entries) <- browser_chapters)
+        Presentation.update_chapter_index(dir, chapter, entries)
+
+      if (browser_chapters.nonEmpty) Presentation.make_global_index(dir)
     }
 
     results
@@ -826,6 +518,7 @@ object Build
     var base_sessions: List[String] = Nil
     var select_dirs: List[Path] = Nil
     var numa_shuffling = false
+    var presentation = Presentation.Context.none
     var requirements = false
     var soft_build = false
     var exclude_session_groups: List[String] = Nil
@@ -851,6 +544,7 @@ Usage: isabelle build [OPTIONS] [SESSIONS ...]
     -B NAME      include session NAME and all descendants
     -D DIR       include session directory and select its sessions
     -N           cyclic shuffling of NUMA CPU nodes (performance tuning)
+    -P DIR       enable HTML/PDF presentation in directory (":" for default)
     -R           refer to requirements of selected sessions
     -S           soft build: only observe changes of sources, not heap images
     -X NAME      exclude sessions from group NAME and all descendants
@@ -875,6 +569,7 @@ Usage: isabelle build [OPTIONS] [SESSIONS ...]
       "B:" -> (arg => base_sessions = base_sessions ::: List(arg)),
       "D:" -> (arg => select_dirs = select_dirs ::: List(Path.explode(arg))),
       "N" -> (_ => numa_shuffling = true),
+      "P:" -> (arg => presentation = Presentation.Context.make(arg)),
       "R" -> (_ => requirements = true),
       "S" -> (_ => soft_build = true),
       "X:" -> (arg => exclude_session_groups = exclude_session_groups ::: List(arg)),
@@ -917,6 +612,7 @@ Usage: isabelle build [OPTIONS] [SESSIONS ...]
             exclude_sessions = exclude_sessions,
             session_groups = session_groups,
             sessions = sessions),
+          presentation = presentation,
           progress = progress,
           check_unknown_files = Mercurial.is_repository(Path.explode("~~")),
           build_heap = build_heap,

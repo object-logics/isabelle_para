@@ -153,13 +153,14 @@ declare -a SOURCES=(
   src/Pure/Thy/file_format.scala
   src/Pure/Thy/html.scala
   src/Pure/Thy/latex.scala
-  src/Pure/Thy/present.scala
+  src/Pure/Thy/presentation.scala
   src/Pure/Thy/sessions.scala
   src/Pure/Thy/thy_element.scala
   src/Pure/Thy/thy_header.scala
   src/Pure/Thy/thy_syntax.scala
   src/Pure/Tools/build.scala
   src/Pure/Tools/build_docker.scala
+  src/Pure/Tools/build_job.scala
   src/Pure/Tools/check_keywords.scala
   src/Pure/Tools/debugger.scala
   src/Pure/Tools/doc.scala

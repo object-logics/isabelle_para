@@ -6,10 +6,10 @@ Prover session: persistent state of logic image.
 
 signature SESSION =
 sig
+  val init: string -> unit
   val get_name: unit -> string
   val welcome: unit -> string
   val get_keywords: unit -> Keyword.keywords
-  val init: HTML.symbols -> bool -> Path.T -> string list -> string -> string * string -> bool -> unit
   val shutdown: unit -> unit
   val finish: unit -> unit
 end;
@@ -17,11 +17,13 @@ end;
 structure Session: SESSION =
 struct
 
-(** persistent session information **)
+(* session name *)
 
-val session = Synchronized.var "Session.session" ({chapter = "", name = ""}, true);
+val session = Synchronized.var "Session.session" "";
 
-fun get_name () = #name (#1 (Synchronized.value session));
+fun init name = Synchronized.change session (K name);
+
+fun get_name () = Synchronized.value session;
 
 fun description () = "Isabelle/" ^ get_name ();
 
@@ -43,16 +45,6 @@ fun update_keywords () =
       (Thy_Info.get_names ()) Keyword.empty_keywords));
 
 
-(* init *)
-
-fun init symbols info info_path documents parent (chapter, name) verbose =
-  (Synchronized.change session (fn ({name = parent_name, ...}, parent_finished) =>
-    if parent_name <> parent orelse not parent_finished then
-      error ("Unfinished parent session " ^ quote parent ^ " for " ^ quote name)
-    else ({chapter = chapter, name = name}, false));
-    Present.init symbols info info_path documents (chapter, name) verbose);
-
-
 (* finish *)
 
 fun shutdown () =
@@ -64,9 +56,7 @@ fun finish () =
  (shutdown ();
   Par_List.map (Global_Theory.get_thm_names o Thy_Info.get_theory) (Thy_Info.get_names ());
   Thy_Info.finish ();
-  Present.finish ();
   shutdown ();
-  update_keywords ();
-  Synchronized.change session (apsnd (K true)));
+  update_keywords ());
 
 end;

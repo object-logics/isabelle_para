@@ -9,6 +9,8 @@ session HOL (main) = Pure +
   theories
     Main (global)
     Complex_Main (global)
+  document_theories
+    Tools.Code_Generator
   document_files
     "root.bib"
     "root.tex"
@@ -959,6 +961,8 @@ session "HOL-SPARK-Manual" in "SPARK/Manual" = "HOL-SPARK" +
     VC_Principles
     Reference
     Complex_Types
+  document_theories
+    "HOL-SPARK-Examples.Greatest_Common_Divisor"
   document_files
     "complex_types.ads"
     "complex_types_app.adb"

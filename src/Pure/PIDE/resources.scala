@@ -15,9 +15,37 @@ import java.io.{File => JFile}
 class Resources(
   val sessions_structure: Sessions.Structure,
   val session_base: Sessions.Base,
-  val log: Logger = No_Logger)
+  val log: Logger = No_Logger,
+  command_timings: List[Properties.T] = Nil)
 {
   resources =>
+
+
+  /* init session */
+
+  def init_session_yxml: String =
+  {
+    import XML.Encode._
+
+    YXML.string_of_body(
+      pair(list(pair(string, int)),
+      pair(list(pair(string, properties)),
+      pair(list(pair(string, string)),
+      pair(list(pair(string, string)),
+      pair(list(pair(string, list(string))),
+      pair(list(properties),
+      pair(list(string),
+      pair(list(pair(string, string)), list(string)))))))))(
+       (Symbol.codes,
+       (sessions_structure.session_positions,
+       (sessions_structure.dest_session_directories,
+       (sessions_structure.session_chapters,
+       (sessions_structure.bibtex_entries,
+       (command_timings,
+       (session_base.doc_names,
+       (session_base.global_theories.toList,
+        session_base.loaded_theories.keys))))))))))
+  }
 
 
   /* file formats */
@@ -28,7 +56,7 @@ class Resources(
   def make_theory_content(thy_name: Document.Node.Name): Option[String] =
     File_Format.registry.get_theory(thy_name).flatMap(_.make_theory_content(resources, thy_name))
 
-  def make_preview(snapshot: Document.Snapshot): Option[Present.Preview] =
+  def make_preview(snapshot: Document.Snapshot): Option[Presentation.Preview] =
     File_Format.registry.get(snapshot.node_name).flatMap(_.make_preview(snapshot))
 
   def is_hidden(name: Document.Node.Name): Boolean =
