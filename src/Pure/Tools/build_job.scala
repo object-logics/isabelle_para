@@ -16,7 +16,6 @@ class Build_Job(progress: Progress,
   deps: Sessions.Deps,
   store: Sessions.Store,
   do_store: Boolean,
-  presentation: Presentation.Context,
   verbose: Boolean,
   val numa_node: Option[Int],
   command_timings0: List[Properties.T])
@@ -52,6 +51,10 @@ class Build_Job(progress: Progress,
           override val xml_cache: XML.Cache = store.xml_cache
           override val xz_cache: XZ.Cache = store.xz_cache
         }
+      def make_rendering(snapshot: Document.Snapshot): Rendering =
+        new Rendering(snapshot, options, session) {
+          override def model: Document.Model = ???
+        }
 
       object Build_Session_Errors
       {
@@ -77,7 +80,6 @@ class Build_Job(progress: Progress,
       val session_timings = new mutable.ListBuffer[Properties.T]
       val runtime_statistics = new mutable.ListBuffer[Properties.T]
       val task_statistics = new mutable.ListBuffer[Properties.T]
-      val document_output = new mutable.ListBuffer[String]
 
       def fun(
         name: String,
@@ -120,9 +122,9 @@ class Build_Job(progress: Progress,
 
           private def loading_theory(msg: Prover.Protocol_Output): Boolean =
             msg.properties match {
-              case Markup.Loading_Theory(name) =>
+              case Markup.Loading_Theory(Markup.Name(name)) =>
                 progress.theory(Progress.Theory(name, session = session_name))
-                true
+                false
               case _ => false
             }
 
@@ -134,28 +136,51 @@ class Build_Job(progress: Progress,
               case _ => false
             }
 
-          private def command_timing(props: Properties.T): Option[Properties.T] =
-            for {
-              props1 <- Markup.Command_Timing.unapply(props)
-              elapsed <- Markup.Elapsed.unapply(props1)
-              elapsed_time = Time.seconds(elapsed)
-              if elapsed_time.is_relevant && elapsed_time >= options.seconds("command_timing_threshold")
-            } yield props1.filter(p => Markup.command_timing_properties(p._1))
-
           override val functions =
             List(
               Markup.Build_Session_Finished.name -> build_session_finished,
               Markup.Loading_Theory.name -> loading_theory,
               Markup.EXPORT -> export,
-              fun(Markup.Command_Timing.name, command_timings, command_timing),
               fun(Markup.Theory_Timing.name, theory_timings, Markup.Theory_Timing.unapply),
               fun(Markup.Session_Timing.name, session_timings, Markup.Session_Timing.unapply),
               fun(Markup.Task_Statistics.name, task_statistics, Markup.Task_Statistics.unapply))
         })
 
+      session.command_timings += Session.Consumer("command_timings")
+        {
+          case Session.Command_Timing(props) =>
+            for {
+              elapsed <- Markup.Elapsed.unapply(props)
+              elapsed_time = Time.seconds(elapsed)
+              if elapsed_time.is_relevant && elapsed_time >= options.seconds("command_timing_threshold")
+            } command_timings += props.filter(Markup.command_timing_property)
+        }
+
       session.runtime_statistics += Session.Consumer("ML_statistics")
         {
           case Session.Runtime_Statistics(props) => runtime_statistics += props
+        }
+
+      session.finished_theories += Session.Consumer[Document.Snapshot]("finished_theories")
+        {
+          case snapshot =>
+            val rendering = make_rendering(snapshot)
+
+            def export(name: String, xml: XML.Body)
+            {
+              val theory_name = snapshot.node_name.theory
+              val args = Protocol.Export.Args(theory_name = theory_name, name = name)
+              val bytes = Bytes(YXML.string_of_body(xml))
+              if (!bytes.is_empty) export_consumer(session_name, args, bytes)
+            }
+            def export_text(name: String, text: String): Unit =
+              export(name, List(XML.Text(text)))
+
+            export(Export.MARKUP, snapshot.xml_markup())
+            export(Export.MESSAGES, snapshot.messages.map(_._1))
+
+            val citations = Library.distinct(rendering.citations(Text.Range.full).map(_.info))
+            export_text(Export.CITATIONS, cat_lines(citations))
         }
 
       session.all_messages += Session.Consumer[Any]("build_session_output")
@@ -212,38 +237,31 @@ class Build_Job(progress: Progress,
       val process_result =
         Isabelle_Thread.interrupt_handler(_ => process.terminate) { process.await_shutdown }
 
+      session.stop()
+
       val export_errors =
         export_consumer.shutdown(close = true).map(Output.error_message_text)
 
-      val document_errors =
+      val (document_output, document_errors) =
         try {
           if (build_errors.isInstanceOf[Exn.Res[_]] && process_result.ok && info.documents.nonEmpty)
           {
-            val document_progress =
-              new Progress {
-                override def echo(msg: String): Unit =
-                  document_output.synchronized { document_output += msg }
-                override def echo_document(msg: String): Unit =
-                  progress.echo_document(msg)
-              }
-            val documents =
-              using(store.open_database_context(deps.sessions_structure))(db_context =>
-                Presentation.build_documents(session_name, deps, db_context,
-                  output_sources = info.document_output,
-                  output_pdf = info.document_output,
-                  progress = document_progress,
-                  verbose = verbose,
-                  verbose_latex = true))
-            using(store.open_database(session_name, output = true))(db =>
-              for ((doc, pdf) <- documents) {
-                db.transaction {
-                  Presentation.write_document(db, session_name, doc, pdf)
-                }
+            using(store.open_database_context(deps.sessions_structure))(db_context =>
+              {
+                val documents =
+                  Presentation.build_documents(session_name, deps, db_context,
+                    output_sources = info.document_output,
+                    output_pdf = info.document_output,
+                    progress = progress,
+                    verbose = verbose)
+                db_context.output_database(session_name)(db =>
+                  documents.foreach(_.write(db, session_name)))
+                (documents.flatMap(_.log_lines), Nil)
               })
           }
-          Nil
+          (Nil, Nil)
         }
-        catch { case Exn.Interrupt.ERROR(msg) => List(msg) }
+        catch { case Exn.Interrupt.ERROR(msg) => (Nil, List(msg)) }
 
       val result =
       {
@@ -256,12 +274,11 @@ class Build_Job(progress: Progress,
             session_timings.toList.map(Protocol.Session_Timing_Marker.apply) :::
             runtime_statistics.toList.map(Protocol.ML_Statistics_Marker.apply) :::
             task_statistics.toList.map(Protocol.Task_Statistics_Marker.apply) :::
-            document_output.toList
+            document_output
 
-        val more_errors =
-          Library.trim_line(stderr.toString) :: export_errors ::: document_errors
-
-        process_result.output(more_output).errors(more_errors)
+        process_result.output(more_output)
+          .error(Library.trim_line(stderr.toString))
+          .errors_rc(export_errors ::: document_errors)
       }
 
       build_errors match {

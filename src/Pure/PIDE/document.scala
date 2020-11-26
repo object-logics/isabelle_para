@@ -552,7 +552,29 @@ object Document
     def commands_loading_ranges(pred: Node.Name => Boolean): List[Text.Range]
     def current_command(other_node_name: Node.Name, offset: Text.Offset): Option[Command]
 
-    def markup_to_XML(range: Text.Range, elements: Markup.Elements): XML.Body
+    def command_snippet(command: Command): Snapshot =
+    {
+      val node_name = command.node_name
+
+      val nodes0 = version.nodes
+      val nodes1 = nodes0 + (node_name -> nodes0(node_name).update_commands(Linear_Set(command)))
+      val version1 = Document.Version.make(nodes1)
+
+      val edits: List[Edit_Text] =
+        List(node_name -> Node.Edits(List(Text.Edit.insert(0, command.source))))
+
+      val state0 = state.define_command(command)
+      val state1 =
+        state0.continue_history(Future.value(version), edits, Future.value(version1))
+          .define_version(version1, state0.the_assignment(version))
+          .assign(version1.id, Nil, List(command.id -> List(Document_ID.make())))._2
+
+      state1.snapshot(name = node_name)
+    }
+
+    def xml_markup(
+      range: Text.Range = Text.Range.full,
+      elements: Markup.Elements = Markup.Elements.full): XML.Body
     def messages: List[(XML.Tree, Position.T)]
     def exports: List[Export.Entry]
     def exports_map: Map[String, Export.Entry]
@@ -672,6 +694,8 @@ object Document
     versions: Map[Document_ID.Version, Version] = Map.empty,
     /*inlined auxiliary files*/
     blobs: Set[SHA1.Digest] = Set.empty,
+    /*loaded theories in batch builds*/
+    theories: Map[Document_ID.Exec, Command.State] = Map.empty,
     /*static markup from define_command*/
     commands: Map[Document_ID.Command, Command.State] = Map.empty,
     /*dynamic markup from execution*/
@@ -710,7 +734,8 @@ object Document
     def define_command(command: Command): State =
     {
       val id = command.id
-      copy(commands = commands + (id -> command.init_state))
+      if (commands.isDefinedAt(id)) fail
+      else copy(commands = commands + (id -> command.init_state))
     }
 
     def defined_command(id: Document_ID.Command): Boolean = commands.isDefinedAt(id)
@@ -721,7 +746,7 @@ object Document
     def the_assignment(version: Version): State.Assignment = assignments.getOrElse(version.id, fail)
 
     def lookup_id(id: Document_ID.Generic): Option[Command.State] =
-      commands.get(id) orElse execs.get(id)
+      theories.get(id) orElse commands.get(id) orElse execs.get(id)
 
     private def self_id(st: Command.State)(id: Document_ID.Generic): Boolean =
       id == st.command.id ||
@@ -738,18 +763,21 @@ object Document
     def accumulate(id: Document_ID.Generic, message: XML.Elem, xml_cache: XML.Cache)
       : (Command.State, State) =
     {
-      execs.get(id) match {
-        case Some(st) =>
-          val new_st = st.accumulate(self_id(st), other_id, message, xml_cache)
-          val execs1 = execs + (id -> new_st)
-          (new_st, copy(execs = execs1, commands_redirection = redirection(new_st)))
+      def update(st: Command.State): (Command.State, State) =
+      {
+        val st1 = st.accumulate(self_id(st), other_id, message, xml_cache)
+        (st1, copy(commands_redirection = redirection(st1)))
+      }
+      execs.get(id).map(update) match {
+        case Some((st1, state1)) => (st1, state1.copy(execs = execs + (id -> st1)))
         case None =>
-          commands.get(id) match {
-            case Some(st) =>
-              val new_st = st.accumulate(self_id(st), other_id, message, xml_cache)
-              val commands1 = commands + (id -> new_st)
-              (new_st, copy(commands = commands1, commands_redirection = redirection(new_st)))
-            case None => fail
+          commands.get(id).map(update) match {
+            case Some((st1, state1)) => (st1, state1.copy(commands = commands + (id -> st1)))
+            case None =>
+              theories.get(id).map(update) match {
+                case Some((st1, state1)) => (st1, state1.copy(theories = theories + (id -> st1)))
+                case None => fail
+              }
           }
       }
     }
@@ -780,6 +808,27 @@ object Document
           command <- version.nodes(node_name).commands.iterator
           st <- command_states(version, command).iterator
         } yield st.exports)
+
+    def begin_theory(node_name: Node.Name, id: Document_ID.Exec, source: String): State =
+      if (theories.isDefinedAt(id)) fail
+      else {
+        val command = Command.unparsed(source, theory = true, id = id, node_name = node_name)
+        copy(theories = theories + (id -> command.empty_state))
+      }
+
+    def end_theory(theory: String): (Snapshot, State) =
+      theories.collectFirst({ case (_, st) if st.command.node_name.theory == theory => st }) match {
+        case None => fail
+        case Some(st) =>
+          val command = st.command
+          val node_name = command.node_name
+          val command1 =
+            Command.unparsed(command.source, theory = true, id = command.id, node_name = node_name,
+              results = st.results, markups = st.markups)
+          val state1 = copy(theories = theories - command1.id)
+          val snapshot = state1.snapshot(name = node_name).command_snippet(command1)
+          (snapshot, state1)
+      }
 
     def assign(id: Document_ID.Version, edited: List[String], update: Assign_Update)
       : ((List[Node.Name], List[Command]), State) =
@@ -955,11 +1004,11 @@ object Document
         range: Text.Range, elements: Markup.Elements): Markup_Tree =
       Command.State.merge_markup(command_states(version, command), index, range, elements)
 
-    def markup_to_XML(
+    def xml_markup(
       version: Version,
       node_name: Node.Name,
-      range: Text.Range,
-      elements: Markup.Elements): XML.Body =
+      range: Text.Range = Text.Range.full,
+      elements: Markup.Elements = Markup.Elements.full): XML.Body =
     {
       val node = version.nodes(node_name)
       if (node_name.is_theory) {
@@ -1079,8 +1128,10 @@ object Document
           }
           else version.nodes.commands_loading(other_node_name).headOption
 
-        def markup_to_XML(range: Text.Range, elements: Markup.Elements): XML.Body =
-          state.markup_to_XML(version, node_name, range, elements)
+        def xml_markup(
+            range: Text.Range = Text.Range.full,
+            elements: Markup.Elements = Markup.Elements.full): XML.Body =
+          state.xml_markup(version, node_name, range = range, elements = elements)
 
         lazy val messages: List[(XML.Tree, Position.T)] =
           (for {
