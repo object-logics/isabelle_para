@@ -261,7 +261,8 @@ object Command
 
     def accumulate(
         self_id: Document_ID.Generic => Boolean,
-        other_id: Document_ID.Generic => Option[(Symbol.Text_Chunk.Id, Symbol.Text_Chunk)],
+        other_id: (Document.Node.Name, Document_ID.Generic) =>
+          Option[(Symbol.Text_Chunk.Id, Symbol.Text_Chunk)],
         message: XML.Elem,
         xml_cache: XML.Cache): State =
       message match {
@@ -293,7 +294,8 @@ object Command
                       val target =
                         if (self_id(id) && command.chunks.isDefinedAt(chunk_name))
                           Some((chunk_name, command.chunks(chunk_name)))
-                        else if (chunk_name == Symbol.Text_Chunk.Default) other_id(id)
+                        else if (chunk_name == Symbol.Text_Chunk.Default)
+                          other_id(command.node_name, id)
                         else None
 
                       (target, atts) match {
@@ -415,43 +417,40 @@ object Command
       // inlined errors
       case Thy_Header.THEORY =>
         val reader = Scan.char_reader(Token.implode(span.content))
-        val header = resources.check_thy_reader(node_name, reader)
+        val header = resources.check_thy(node_name, reader)
         val imports_pos = header.imports_pos
         val raw_imports =
           try {
-            val read_imports = Thy_Header.read(reader, Token.Pos.none).imports
+            val read_imports = Thy_Header.read(node_name, reader).imports.map(_._1)
             if (imports_pos.length == read_imports.length) read_imports else error("")
           }
-          catch { case _: Throwable => List.fill(imports_pos.length)("") }
+          catch { case _: Throwable => List.fill(header.imports.length)("") }
 
-        val errs1 =
+        val errors =
           for { ((import_name, pos), s) <- imports_pos zip raw_imports if !can_import(import_name) }
           yield {
             val completion =
               if (Thy_Header.is_base_name(s)) resources.complete_import_name(node_name, s) else Nil
-            "Bad theory import " +
-              Markup.Path(import_name.node).markup(quote(import_name.toString)) +
-              Position.here(pos) + Completion.report_theories(pos, completion)
+            val msg =
+              "Bad theory import " +
+                Markup.Path(import_name.node).markup(quote(import_name.toString)) +
+                Position.here(pos) + Completion.report_theories(pos, completion)
+            Exn.Exn[Command.Blob](ERROR(msg))
           }
-        val errs2 =
-          for {
-            (_, spec) <- header.keywords
-            if !Command_Span.load_commands.exists(_.name == spec.load_command)
-          } yield { "Unknown load command specification: " + quote(spec.load_command) }
-      ((errs1 ::: errs2).map(msg => Exn.Exn[Command.Blob](ERROR(msg))), -1)
+        (errors, -1)
 
       // auxiliary files
       case _ =>
-        val (files, index) = span.loaded_files(syntax)
+        val loaded_files = span.loaded_files(syntax)
         val blobs =
-          files.map(file =>
+          loaded_files.files.map(file =>
             (Exn.capture {
               val src_path = Path.explode(file)
               val name = Document.Node.Name(resources.append(node_name, src_path))
               val content = get_blob(name).map(blob => (blob.bytes.sha1_digest, blob.chunk))
               Blob(name, src_path, content)
             }).user_error)
-        (blobs, index)
+        (blobs, loaded_files.index)
     }
   }
 }

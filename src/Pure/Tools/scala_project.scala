@@ -23,7 +23,7 @@ object Scala_Project
 
   /* file and directories */
 
-  def isabelle_files(): List[String] =
+  lazy val isabelle_files: List[String] =
   {
     val files1 =
     {
@@ -51,6 +51,20 @@ object Scala_Project
     files1 ::: files2
   }
 
+  lazy val isabelle_scala_files: Map[String, Path] =
+    (Map.empty[String, Path] /: isabelle_files)({
+      case (map, name) =>
+        if (!name.startsWith("src/Tools/jEdit/") && name.endsWith(".scala")) {
+          val path = Path.explode("~~/" + name)
+          val base = path.base.implode
+          map.get(base) match {
+            case None => map + (base -> path)
+            case Some(path1) => error("Conflicting base names: " + path + " vs. " + path1)
+          }
+        }
+        else map
+    })
+
   val isabelle_dirs: List[(String, Path)] =
     List(
       "src/Pure/" -> Path.explode("isabelle"),
@@ -60,6 +74,31 @@ object Scala_Project
       "src/Tools/jEdit/src/" -> Path.explode("isabelle.jedit"),
       "src/HOL/SPARK/Tools" -> Path.explode("isabelle.spark"),
       "src/HOL/Tools/Nitpick" -> Path.explode("isabelle.nitpick"))
+
+
+  /* compile-time position */
+
+  def here: Here =
+  {
+    val exn = new Exception
+    exn.getStackTrace.toList match {
+      case _ :: caller :: _ =>
+        val name = proper_string(caller.getFileName).getOrElse("")
+        val line = caller.getLineNumber
+        new Here(name, line)
+      case _ => new Here("", 0)
+    }
+  }
+
+  class Here private[Scala_Project](name: String, line: Int)
+  {
+    override def toString: String = name + ":" + line
+    def position: Position.T =
+      isabelle_scala_files.get(name) match {
+        case Some(path) => Position.Line_File(line, path.implode)
+        case None => Position.none
+      }
+  }
 
 
   /* scala project */
@@ -78,7 +117,8 @@ object Scala_Project
 
     Isabelle_System.copy_dir(Path.explode("~~/src/Tools/jEdit/dist/jEdit"), java_src_dir)
 
-    val files = isabelle_files()
+    val files = isabelle_files
+    isabelle_scala_files
 
     for (file <- files if file.endsWith(".scala")) {
       val (path, target) =
@@ -121,7 +161,8 @@ dependencies {
   /* Isabelle tool wrapper */
 
   val isabelle_tool =
-    Isabelle_Tool("scala_project", "setup Gradle project for Isabelle/Scala/jEdit", args =>
+    Isabelle_Tool("scala_project", "setup Gradle project for Isabelle/Scala/jEdit",
+      Scala_Project.here, args =>
     {
       var symlinks = false
 

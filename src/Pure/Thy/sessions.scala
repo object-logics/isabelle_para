@@ -49,7 +49,6 @@ object Sessions
 
   sealed case class Base(
     pos: Position.T = Position.none,
-    doc_names: List[String] = Nil,
     session_directories: Map[JFile, String] = Map.empty,
     global_theories: Map[String, String] = Map.empty,
     session_theories: List[Document.Node.Name] = Nil,
@@ -141,8 +140,6 @@ object Sessions
         }
       }
     }
-
-    val doc_names = Doc.doc_names()
 
     val bootstrap =
       Sessions.Base.bootstrap(
@@ -325,7 +322,6 @@ object Sessions
             val base =
               Base(
                 pos = info.pos,
-                doc_names = doc_names,
                 session_directories = sessions_structure.session_directories,
                 global_theories = sessions_structure.global_theories,
                 session_theories = session_theories,
@@ -1052,7 +1048,8 @@ object Sessions
 
   /* Isabelle tool wrapper */
 
-  val isabelle_tool = Isabelle_Tool("sessions", "explore structure of Isabelle sessions", args =>
+  val isabelle_tool = Isabelle_Tool("sessions", "explore structure of Isabelle sessions",
+    Scala_Project.here, args =>
   {
     var base_sessions: List[String] = Nil
     var select_dirs: List[Path] = Nil

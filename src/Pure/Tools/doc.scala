@@ -7,9 +7,6 @@ Access to Isabelle documentation.
 package isabelle
 
 
-import scala.util.matching.Regex
-
-
 object Doc
 {
   /* dirs */
@@ -41,8 +38,8 @@ object Doc
     }
     else None
 
-  private val Section_Entry = new Regex("""^(\S.*)\s*$""")
-  private val Doc_Entry = new Regex("""^\s+(\S+)\s+(.+)\s*$""")
+  private val Section_Entry = """^(\S.*)\s*$""".r
+  private val Doc_Entry = """^\s+(\S+)\s+(.+)\s*$""".r
 
   private def release_notes(): List[Entry] =
     Section("Release Notes", true) ::
@@ -76,8 +73,13 @@ object Doc
     examples() ::: release_notes() ::: main_contents
   }
 
-  def doc_names(): List[String] =
-    for (Doc(name, _, _) <- contents()) yield name
+  object Doc_Names extends Scala.Fun("doc_names")
+  {
+    val here = Scala_Project.here
+    def apply(arg: String): String =
+      if (arg.nonEmpty) error("Bad argument: " + quote(arg))
+      else cat_lines((for (Doc(name, _, _) <- contents()) yield name).sorted)
+  }
 
 
   /* view */
@@ -95,7 +97,8 @@ object Doc
 
   /* Isabelle tool wrapper */
 
-  val isabelle_tool = Isabelle_Tool("doc", "view Isabelle documentation", args =>
+  val isabelle_tool = Isabelle_Tool("doc", "view Isabelle documentation",
+    Scala_Project.here, args =>
   {
     val getopts = Getopts("""
 Usage: isabelle doc [DOC ...]

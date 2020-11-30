@@ -13,7 +13,7 @@ sig
      session_chapters: (string * string) list,
      bibtex_entries: (string * string list) list,
      command_timings: Properties.T list,
-     docs: string list,
+     scala_functions: (string * Position.T) list,
      global_theories: (string * string) list,
      loaded_theories: string list} -> unit
   val init_session_yxml: string -> unit
@@ -24,7 +24,7 @@ sig
   val check_session: Proof.context -> string * Position.T -> string
   val session_chapter: string -> string
   val last_timing: Toplevel.transition -> Time.time
-  val check_doc: Proof.context -> string * Position.T -> string
+  val scala_function_pos: string -> Position.T
   val master_directory: theory -> Path.T
   val imports_of: theory -> (string * Position.T) list
   val begin_theory: Path.T -> Thy_Header.header -> theory list -> theory
@@ -37,7 +37,6 @@ sig
   val check_thy: Path.T -> string ->
    {master: Path.T * SHA1.digest, text: string, theory_pos: Position.T,
     imports: (string * Position.T) list, keywords: Thy_Header.keywords}
-  val extensions: string list -> Path.T -> Path.T list
   val parse_files: (Path.T -> Path.T list) -> (theory -> Token.file list) parser
   val parse_file: (theory -> Token.file) parser
   val provide: Path.T * SHA1.digest -> theory -> theory
@@ -98,44 +97,45 @@ fun make_entry props : entry =
   {pos = Position.of_properties props, serial = serial ()};
 
 val empty_session_base =
-  {session_positions = []: (string * entry) list,
-   session_directories = Symtab.empty: Path.T list Symtab.table,
-   session_chapters = Symtab.empty: string Symtab.table,
-   bibtex_entries = Symtab.empty: string list Symtab.table,
-   timings = empty_timings,
-   docs = []: (string * entry) list,
-   global_theories = Symtab.empty: string Symtab.table,
-   loaded_theories = Symtab.empty: unit Symtab.table};
+  ({session_positions = []: (string * entry) list,
+    session_directories = Symtab.empty: Path.T list Symtab.table,
+    session_chapters = Symtab.empty: string Symtab.table,
+    bibtex_entries = Symtab.empty: string list Symtab.table,
+    timings = empty_timings,
+    scala_functions = Symtab.empty: Position.T Symtab.table},
+   {global_theories = Symtab.empty: string Symtab.table,
+    loaded_theories = Symtab.empty: unit Symtab.table});
 
 val global_session_base =
   Synchronized.var "Sessions.base" empty_session_base;
 
 fun init_session
-    {session_positions, session_directories, session_chapters,
-      bibtex_entries, command_timings, docs, global_theories, loaded_theories} =
+    {session_positions, session_directories, session_chapters, bibtex_entries,
+      command_timings, scala_functions, global_theories, loaded_theories} =
   Synchronized.change global_session_base
     (fn _ =>
-      {session_positions = sort_by #1 (map (apsnd make_entry) session_positions),
-       session_directories =
-         fold_rev (fn (dir, name) => Symtab.cons_list (name, Path.explode dir))
-           session_directories Symtab.empty,
-       session_chapters = Symtab.make session_chapters,
-       bibtex_entries = Symtab.make bibtex_entries,
-       timings = make_timings command_timings,
-       docs = sort_by #1 (map (apsnd make_entry o rpair []) docs),
-       global_theories = Symtab.make global_theories,
-       loaded_theories = Symtab.make_set loaded_theories});
+      ({session_positions = sort_by #1 (map (apsnd make_entry) session_positions),
+        session_directories =
+          fold_rev (fn (dir, name) => Symtab.cons_list (name, Path.explode dir))
+            session_directories Symtab.empty,
+        session_chapters = Symtab.make session_chapters,
+        bibtex_entries = Symtab.make bibtex_entries,
+        timings = make_timings command_timings,
+        scala_functions = Symtab.make scala_functions},
+       {global_theories = Symtab.make global_theories,
+        loaded_theories = Symtab.make_set loaded_theories}));
 
 fun init_session_yxml yxml =
   let
-    val (session_positions, (session_directories, (session_chapters,
-          (bibtex_entries, (command_timings, (docs, (global_theories, loaded_theories))))))) =
+    val (session_positions, (session_directories, (session_chapters, (bibtex_entries,
+        (command_timings, (scala_functions, (global_theories, loaded_theories))))))) =
       YXML.parse_body yxml |>
         let open XML.Decode in
           (pair (list (pair string properties))
             (pair (list (pair string string)) (pair (list (pair string string))
               (pair (list (pair string (list string))) (pair (list properties)
-                (pair (list string) (pair (list (pair string string)) (list string))))))))
+                (pair (list (pair string properties))
+                  (pair (list (pair string string)) (list string))))))))
         end;
   in
     init_session
@@ -144,7 +144,7 @@ fun init_session_yxml yxml =
        session_chapters = session_chapters,
        bibtex_entries = bibtex_entries,
        command_timings = command_timings,
-       docs = docs,
+       scala_functions = map (apsnd Position.of_properties) scala_functions,
        global_theories = global_theories,
        loaded_theories = loaded_theories}
   end;
@@ -154,36 +154,30 @@ fun init_session_file path =
 
 fun finish_session_base () =
   Synchronized.change global_session_base
-    (fn {global_theories, loaded_theories, ...} =>
-      {session_positions = [],
-       session_directories = Symtab.empty,
-       session_chapters = Symtab.empty,
-       bibtex_entries = Symtab.empty,
-       timings = empty_timings,
-       docs = [],
-       global_theories = global_theories,
-       loaded_theories = loaded_theories});
+    (apfst (K (#1 empty_session_base)));
 
 fun get_session_base f = f (Synchronized.value global_session_base);
+fun get_session_base1 f = get_session_base (f o #1);
+fun get_session_base2 f = get_session_base (f o #2);
 
-fun global_theory a = Symtab.lookup (get_session_base #global_theories) a;
-fun loaded_theory a = Symtab.defined (get_session_base #loaded_theories) a;
+fun global_theory a = Symtab.lookup (get_session_base2 #global_theories) a;
+fun loaded_theory a = Symtab.defined (get_session_base2 #loaded_theories) a;
 
-fun check_name which kind markup ctxt arg =
-  Completion.check_item kind markup (get_session_base which |> sort_by #1) ctxt arg;
-
-val check_session =
-  check_name #session_positions "session"
+fun check_session ctxt arg =
+  Completion.check_item "session"
     (fn (name, {pos, serial}) =>
       Markup.entity Markup.sessionN name
-      |> Markup.properties (Position.entity_properties_of false serial pos));
+      |> Markup.properties (Position.entity_properties_of false serial pos))
+    (get_session_base1 #session_positions) ctxt arg;
 
 fun session_chapter name =
-  the_default "Unsorted" (Symtab.lookup (get_session_base #session_chapters) name);
+  the_default "Unsorted" (Symtab.lookup (get_session_base1 #session_chapters) name);
 
-fun last_timing tr = get_timings (get_session_base #timings) tr;
+fun last_timing tr = get_timings (get_session_base1 #timings) tr;
 
-val check_doc = check_name #docs "documentation" (Markup.doc o #1);
+fun scala_function_pos name =
+  Symtab.lookup (get_session_base1 #scala_functions) name
+  |> the_default Position.none;
 
 
 (* manage source files *)
@@ -235,13 +229,13 @@ fun theory_name qualifier theory =
   else Long_Name.qualify qualifier theory;
 
 fun theory_bibtex_entries theory =
-  Symtab.lookup_list (get_session_base #bibtex_entries) (theory_qualifier theory);
+  Symtab.lookup_list (get_session_base1 #bibtex_entries) (theory_qualifier theory);
 
 fun find_theory_file thy_name =
   let
     val thy_file = thy_path (Path.basic (Long_Name.base_name thy_name));
     val session = theory_qualifier thy_name;
-    val dirs = Symtab.lookup_list (get_session_base #session_directories) session;
+    val dirs = Symtab.lookup_list (get_session_base1 #session_directories) session;
   in
     dirs |> get_first (fn dir =>
       let val path = dir + thy_file
@@ -292,8 +286,6 @@ fun check_thy dir thy_name =
 
 
 (* load files *)
-
-fun extensions exts path = map (fn ext => Path.ext ext path) exts;
 
 fun parse_files make_paths =
   Scan.ahead Parse.not_eof -- Parse.path >> (fn (tok, name) => fn thy =>
@@ -384,8 +376,6 @@ in
 val _ = Theory.setup
  (Thy_Output.antiquotation_verbatim_embedded \<^binding>\<open>session\<close>
     (Scan.lift Parse.embedded_position) check_session #>
-  Thy_Output.antiquotation_verbatim_embedded \<^binding>\<open>doc\<close>
-    (Scan.lift Parse.embedded_position) check_doc #>
   Thy_Output.antiquotation_raw_embedded \<^binding>\<open>path\<close> (document_antiq check_path) (K I) #>
   Thy_Output.antiquotation_raw_embedded \<^binding>\<open>file\<close> (document_antiq check_file) (K I) #>
   Thy_Output.antiquotation_raw_embedded \<^binding>\<open>dir\<close> (document_antiq check_dir) (K I) #>

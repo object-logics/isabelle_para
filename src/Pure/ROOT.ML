@@ -326,6 +326,7 @@ ML_file "System/message_channel.ML";
 ML_file "System/isabelle_process.ML";
 ML_file "System/scala.ML";
 ML_file "System/scala_compiler.ML";
+ML_file "System/isabelle_tool.ML";
 ML_file "Thy/bibtex.ML";
 ML_file "PIDE/protocol.ML";
 ML_file "General/output_primitives_virtual.ML";
@@ -349,6 +350,7 @@ ML_file "Tools/find_consts.ML";
 ML_file "Tools/simplifier_trace.ML";
 ML_file_no_debug "Tools/debugger.ML";
 ML_file "Tools/named_theorems.ML";
+ML_file "Tools/doc.ML";
 ML_file "Tools/jedit.ML";
 ML_file "Tools/ghc.ML";
 ML_file "Tools/generated_files.ML"
