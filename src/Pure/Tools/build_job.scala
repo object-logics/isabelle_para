@@ -18,46 +18,57 @@ object Build_Job
     db_context: Sessions.Database_Context,
     resources: Resources,
     session: String,
-    theory: String): Option[Command] =
+    theory: String,
+    unicode_symbols: Boolean = false): Option[Command] =
   {
     def read(name: String): Export.Entry =
       db_context.get_export(List(session), theory, name)
 
     def read_xml(name: String): XML.Body =
-      db_context.xml_cache.body(
-        YXML.parse_body(Symbol.decode(UTF8.decode_permissive(read(name).uncompressed))))
+      db_context.xml_cache.body(YXML.parse_body(
+        Symbol.output(unicode_symbols, UTF8.decode_permissive(read(name).uncompressed))))
 
     (read(Export.DOCUMENT_ID).text, split_lines(read(Export.FILES).text)) match {
       case (Value.Long(id), thy_file :: blobs_files) =>
         val thy_path = Path.explode(thy_file)
-        val thy_source = Symbol.decode(File.read(thy_path))
         val node_name = resources.file_node(thy_path, theory = theory)
+
+        val results =
+          Command.Results.make(
+            for (elem @ XML.Elem(Markup(_, Markup.Serial(i)), _) <- read_xml(Export.MESSAGES))
+              yield i -> elem)
 
         val blobs =
           blobs_files.map(file =>
           {
             val path = Path.explode(file)
+            val name = resources.file_node(path)
             val src_path = File.relative_path(thy_path, path).getOrElse(path)
-            Command.Blob.read_file(resources.file_node(path), src_path)
+            Command.Blob(name, src_path, None)
           })
-        val blobs_info = Command.Blobs_Info(blobs.map(Exn.Res(_)))
+        val blobs_xml =
+          for (i <- (1 to blobs.length).toList)
+            yield read_xml(Export.MARKUP + i)
 
-        val results =
-          Command.Results.make(
-            for {
-              tree @ XML.Elem(markup, _) <- read_xml(Export.MESSAGES)
-              i <- Markup.Serial.unapply(markup.properties)
-            } yield i -> tree)
+        val blobs_info =
+          Command.Blobs_Info(
+            for { (Command.Blob(name, src_path, _), xml) <- blobs zip blobs_xml }
+              yield {
+                val text = XML.content(xml)
+                val chunk = Symbol.Text_Chunk(text)
+                val digest = SHA1.digest(Symbol.encode(text))
+                Exn.Res(Command.Blob(name, src_path, Some((digest, chunk))))
+              })
 
-        val markup_index_blobs =
+        val thy_xml = read_xml(Export.MARKUP)
+        val thy_source = XML.content(thy_xml)
+
+        val markups_index =
           Command.Markup_Index.markup :: blobs.map(Command.Markup_Index.blob)
         val markups =
           Command.Markups.make(
-            for ((index, i) <- markup_index_blobs.zipWithIndex)
-            yield {
-              val xml = read_xml(Export.MARKUP + (if (i == 0) "" else i.toString))
-              index -> Markup_Tree.from_XML(xml)
-            })
+            for ((index, xml) <- markups_index.zip(thy_xml :: blobs_xml))
+            yield index -> Markup_Tree.from_XML(xml))
 
         val command =
           Command.unparsed(thy_source, theory = true, id = id, node_name = node_name,
@@ -74,10 +85,12 @@ object Build_Job
     options: Options,
     session_name: String,
     theories: List[String] = Nil,
+    verbose: Boolean = false,
     progress: Progress = new Progress,
     margin: Double = Pretty.default_margin,
     breakgain: Double = Pretty.default_breakgain,
-    metric: Pretty.Metric = Pretty.Default_Metric)
+    metric: Pretty.Metric = Symbol.Metric,
+    unicode_symbols: Boolean = false)
   {
     val store = Sessions.store(options)
 
@@ -102,23 +115,33 @@ object Build_Job
           val print_theories =
             if (theories.isEmpty) used_theories else used_theories.filter(theories.toSet)
           for (thy <- print_theories) {
-            val thy_heading = "\nTheory " + quote(thy)
-            read_theory(db_context, resources, session_name, thy) match {
-              case None => progress.echo(thy_heading + ": MISSING")
+            val thy_heading = "\nTheory " + quote(thy) + ":"
+            read_theory(db_context, resources, session_name, thy, unicode_symbols = unicode_symbols)
+            match {
+              case None => progress.echo(thy_heading + " MISSING")
               case Some(command) =>
-                progress.echo(thy_heading)
                 val snapshot = Document.State.init.command_snippet(command)
                 val rendering = new Rendering(snapshot, options, session)
-                for (Text.Info(_, t) <- rendering.text_messages(Text.Range.full)) {
-                  progress.echo(
-                    Protocol.message_text(List(t), margin = margin, breakgain = breakgain,
-                      metric = metric))
+                val messages =
+                  rendering.text_messages(Text.Range.full)
+                    .filter(message => verbose || Protocol.is_exported(message.info))
+                if (messages.nonEmpty) {
+                  val line_document = Line.Document(command.source)
+                  progress.echo(thy_heading)
+                  for (Text.Info(range, elem) <- messages) {
+                    val line = line_document.position(range.start).line1
+                    val pos = Position.Line_File(line, command.node_name.node)
+                    progress.echo(
+                      Protocol.message_text(elem, heading = true, pos = pos,
+                        margin = margin, breakgain = breakgain, metric = metric))
+                  }
                 }
             }
           }
 
           if (errors.nonEmpty) {
-            progress.echo("\nErrors:\n" + Output.error_message_text(cat_lines(errors)))
+            val msg = Symbol.output(unicode_symbols, cat_lines(errors))
+            progress.echo("\nBuild errors:\n" + Output.error_message_text(msg))
           }
           if (rc != 0) progress.echo("\n" + Process_Result.print_return_code(rc))
       }
@@ -133,25 +156,31 @@ object Build_Job
   {
     /* arguments */
 
+    var unicode_symbols = false
     var theories: List[String] = Nil
     var margin = Pretty.default_margin
     var options = Options.init()
+    var verbose = false
 
     val getopts = Getopts("""
 Usage: isabelle log [OPTIONS] SESSION
 
   Options are:
-    -T NAME      restrict to given theories (multiple options)
+    -T NAME      restrict to given theories (multiple options possible)
+    -U           output Unicode symbols
     -m MARGIN    margin for pretty printing (default: """ + margin + """)
     -o OPTION    override Isabelle system OPTION (via NAME=VAL or NAME)
+    -v           print all messages, including information, tracing etc.
 
   Print messages from the build database of the given session, without any
   checks against current sources: results from a failed build can be
   printed as well.
 """,
       "T:" -> (arg => theories = theories ::: List(arg)),
+      "U" -> (_ => unicode_symbols = true),
       "m:" -> (arg => margin = Value.Double.parse(arg)),
-      "o:" -> (arg => options = options + arg))
+      "o:" -> (arg => options = options + arg),
+      "v" -> (_ => verbose = true))
 
     val more_args = getopts(args)
     val session_name =
@@ -162,7 +191,8 @@ Usage: isabelle log [OPTIONS] SESSION
 
     val progress = new Console_Progress()
 
-    print_log(options, session_name, theories = theories, margin = margin, progress = progress)
+    print_log(options, session_name, theories = theories, verbose = verbose, margin = margin,
+      progress = progress, unicode_symbols = unicode_symbols)
   })
 }
 
@@ -237,7 +267,6 @@ class Build_Job(progress: Progress,
 
       val stdout = new StringBuilder(1000)
       val stderr = new StringBuilder(1000)
-      val messages = new mutable.ListBuffer[XML.Elem]
       val command_timings = new mutable.ListBuffer[Properties.T]
       val theory_timings = new mutable.ListBuffer[Properties.T]
       val session_timings = new mutable.ListBuffer[Properties.T]
@@ -367,9 +396,6 @@ class Build_Job(progress: Progress,
             else if (msg.is_stderr) {
               stderr ++= Symbol.encode(XML.content(message))
             }
-            else if (Protocol.is_exported(message)) {
-              messages += message
-            }
             else if (msg.is_exit) {
               val err =
                 "Prover terminated" +
@@ -418,8 +444,7 @@ class Build_Job(progress: Progress,
 
       val (document_output, document_errors) =
         try {
-          if (build_errors.isInstanceOf[Exn.Res[_]] && process_result.ok && info.documents.nonEmpty)
-          {
+          if (build_errors.isInstanceOf[Exn.Res[_]] && process_result.ok && info.documents.nonEmpty) {
             using(store.open_database_context())(db_context =>
               {
                 val documents =
@@ -433,9 +458,12 @@ class Build_Job(progress: Progress,
                 (documents.flatMap(_.log_lines), Nil)
               })
           }
-          (Nil, Nil)
+          else (Nil, Nil)
         }
-        catch { case Exn.Interrupt.ERROR(msg) => (Nil, List(msg)) }
+        catch {
+          case exn: Presentation.Build_Error => (exn.log_lines, List(exn.message))
+          case Exn.Interrupt.ERROR(msg) => (Nil, List(msg))
+        }
 
       val result =
       {
@@ -448,8 +476,6 @@ class Build_Job(progress: Progress,
 
         val more_output =
           Library.trim_line(stdout.toString) ::
-            messages.toList.map(message =>
-              Symbol.encode(Protocol.message_text(List(message), metric = Symbol.Metric))) :::
             command_timings.toList.map(Protocol.Command_Timing_Marker.apply) :::
             used_theory_timings.map(Protocol.Theory_Timing_Marker.apply) :::
             session_timings.toList.map(Protocol.Session_Timing_Marker.apply) :::
